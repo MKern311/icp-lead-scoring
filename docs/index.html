@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Ideal Customer Profile definieren und Leads nachvollziehbar bewerten – alle Daten bleiben lokal im Browser.">
+  <title>ICP Lead Scoring</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="#/profile">ICP&nbsp;Lead&nbsp;Scoring</a>
+    <nav class="main-nav" aria-label="Hauptnavigation">
+      <a href="#/profile" data-nav="profile">Profile</a>
+      <a href="#/leads" data-nav="leads">Leads</a>
+      <a href="#/import" data-nav="import">Import</a>
+    </nav>
+    <div class="active-profile" id="active-profile-indicator" title="Aktives Profil"></div>
+  </header>
+
+  <main id="app">
+    <section id="view-profile-list" class="view" hidden aria-label="Profil-Übersicht"></section>
+    <section id="view-profile-editor" class="view" hidden aria-label="Profil bearbeiten"></section>
+    <section id="view-lead-list" class="view" hidden aria-label="Lead-Rangliste"></section>
+    <section id="view-lead-form" class="view" hidden aria-label="Lead erfassen"></section>
+    <section id="view-import" class="view" hidden aria-label="CSV-Import"></section>
+  </main>
+
+  <footer class="app-footer">
+    Alle Daten bleiben lokal in Ihrem Browser gespeichert – kein Konto, kein Server.
+  </footer>
+
+  <div id="toast-container" aria-live="polite"></div>
+
+  <dialog id="confirm-dialog">
+    <p id="confirm-message"></p>
+    <div class="dialog-actions">
+      <button type="button" id="confirm-cancel" class="btn">Abbrechen</button>
+      <button type="button" id="confirm-ok" class="btn btn-danger">Fortfahren</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/icp-profile-export.schema.json",
+  "title": "ICP Profile Export",
+  "description": "Exportformat eines ICP-Profils. Menschenlesbar, versioniert, ohne Nutzdaten (keine Leads).",
+  "type": "object",
+  "required": ["format", "schemaVersion", "profile"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "icp-profile" },
+    "schemaVersion": { "const": 1 },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "appVersion": { "type": "string" },
+    "profile": {
+      "type": "object",
+      "required": ["name", "missingValuePolicy", "criteria", "tiers"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "missingValuePolicy": { "enum": ["neutral", "zero"] },
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/criterion" }
+        },
+        "tiers": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "items": { "$ref": "#/$defs/tier" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "criterion": {
+      "type": "object",
+      "required": ["name", "type", "weight", "knockout", "rules"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 500 },
+        "type": { "enum": ["select", "range", "boolean", "scale"] },
+        "weight": { "type": "number", "minimum": 0, "maximum": 100 },
+        "knockout": { "type": "boolean" },
+        "rules": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["options"],
+              "additionalProperties": false,
+              "properties": {
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "required": ["label", "points"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                      "points": { "type": "integer", "minimum": 0, "maximum": 100 }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["ranges"],
+              "additionalProperties": false,
+              "properties": {
+                "ranges": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "required": ["min", "max", "points"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "min": { "type": "number" },
+                      "max": { "type": "number" },
+                      "points": { "type": "integer", "minimum": 0, "maximum": 100 }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["pointsYes", "pointsNo"],
+              "additionalProperties": false,
+              "properties": {
+                "pointsYes": { "type": "integer", "minimum": 0, "maximum": 100 },
+                "pointsNo": { "type": "integer", "minimum": 0, "maximum": 100 }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["min", "max"],
+              "additionalProperties": false,
+              "properties": {
+                "min": { "type": "integer" },
+                "max": { "type": "integer" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "tier": {
+      "type": "object",
+      "required": ["label", "minScore"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "minScore": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    }
+  }
+}
