@@ -19,6 +19,7 @@ export const templates = [
           weight: 25,
           knockout: false,
           stage: 'prescreening',
+          searchHint: 'Bevorzugt IT/Software und Industrie/Fertigung',
           rules: {
             options: [
               { label: 'IT / Software', points: 100 },
@@ -36,6 +37,7 @@ export const templates = [
           weight: 20,
           knockout: false,
           stage: 'prescreening',
+          searchHint: 'Bevorzugt 50–249 Mitarbeiter',
           rules: {
             ranges: [
               { min: 1, max: 9, points: 30 },
@@ -103,6 +105,7 @@ export const templates = [
           weight: 20,
           knockout: false,
           stage: 'prescreening',
+          searchHint: 'Bevorzugt Teams mit 11–50 potenziellen Nutzern',
           rules: {
             ranges: [
               { min: 1, max: 10, points: 40 },
@@ -128,6 +131,7 @@ export const templates = [
           weight: 25,
           knockout: false,
           stage: 'prescreening',
+          searchHint: 'Bevorzugt Technologie und Professional Services',
           rules: {
             options: [
               { label: 'Technologie', points: 100 },

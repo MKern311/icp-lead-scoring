@@ -131,3 +131,14 @@ dialog::backdrop { background: rgba(20, 30, 40, 0.45); }
 .empty-state { text-align: center; color: var(--color-text-muted); padding: var(--space-5); }
 .weight-sum { font-weight: 600; }
 .weight-sum.off { color: var(--color-danger); }
+
+/* Workflow (geführtes Screening, Feature 003) */
+.workflow-steps { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.workflow-steps .step { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-muted); }
+.workflow-steps .step.active { color: var(--color-text); font-weight: 600; }
+.workflow-steps .step.done { color: var(--color-ok); }
+.workflow-steps .num { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface); font-size: 0.85rem; }
+.workflow-steps .step.active .num { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.workflow-steps .step.done .num { background: var(--color-ok); border-color: var(--color-ok); color: #fff; }
+.workflow-steps .sep { color: var(--color-text-muted); }
+.criterion-card.unconfirmed { border-left: 3px solid var(--color-warn-border); }

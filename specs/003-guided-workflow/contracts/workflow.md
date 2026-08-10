@@ -1,0 +1,69 @@
+# Contract: Geführter Screening-Workflow
+
+Verbindliche Regeln für `docs/js/ui/workflow.js` und die zugehörige pure Logik in
+`docs/js/core/`. Ergänzt den Screening-Contract
+(`specs/002-online-screening/contracts/screening.md`) — dieser bleibt für
+Request-Aufbau, Antwort-Parsing und Netzwerkschicht maßgeblich.
+
+## W1: Einstieg & Schritt-Gates
+
+- Route `#/screening` rendert den Workflow; es gibt keinen weiteren Screening-Einstieg.
+- Ohne aktives Profil: Erklärung + Verweis auf Profil-Anlage; kein Schritt startet.
+- Schritt 1 → 2 nur, wenn (a) jedes Kriterium des aktiven Profils in dieser Sitzung
+  aktiv bestätigt oder zugeordnet wurde und (b) mindestens ein Kriterium
+  `stage === 'prescreening'` hat. Verletzung ⇒ „Weiter" gesperrt mit Begründung.
+- Schritt 2 startet den Lauf nur mit hinterlegtem API-Schlüssel; sonst
+  Schlüssel-Eingabe an Ort und Stelle (bestehende Maskierungs- und Speicherregeln,
+  Key `icp.v1.apikey`).
+- Schritt 2 → 3 nach Übernahme von ≥ 1 Kandidaten; bei 0 übernommenen Kandidaten
+  bleibt der Workflow in Schritt 2 (Lauf wiederholbar mit angepassten Parametern).
+- Wiedereinstieg: Ist `qualificationQueue(profile, leads)` nicht leer, bietet der
+  Workflow vor Schritt 1 den Direkteinstieg in Schritt 3 mit dieser Warteschlange an.
+
+## W2: Schritt 1 — Bestätigungspflicht & Suchhinweise
+
+- Alle Kriterien erscheinen als Liste (Name, Beschreibung, Phasen-Wahl mit aktueller
+  Phase als Vorschlag). Eine Zuordnung gilt erst als bestätigt, wenn der Nutzer sie in
+  dieser Workflow-Sitzung aktiv gesetzt oder explizit bestätigt hat.
+- Phasen-Änderungen und Suchhinweise werden sofort im Profil gespeichert
+  (`store.saveProfile`) — identische Daten wie im Profil-Editor.
+- Suchhinweis-Eingabe erscheint nur bei Pre-Screening-Kriterien; Wert bleibt bei
+  Phasenwechsel erhalten. Max. 200 Zeichen, getrimmt.
+- Danach Suchparameter: Region (Default „DACH"), Anzahl 5–50 (Default 20), globale
+  Hinweise — Vorbelegung wie bisheriger Screening-Lauf.
+
+## W3: Schritt 2 — Lauf & Übernahme
+
+- Request-Aufbau ausschließlich über `buildScreeningRequest` (Contract SC-004 bleibt
+  testverankert). Neu dort: je Pre-Screening-Kriterium mit nicht-leerem `searchHint`
+  wird eine Zeile `Suchhinweis: <text>` an die Kriterienbeschreibung angehängt.
+  Suchhinweise von Qualifizierungskriterien erscheinen nie im Request.
+- Fortschritt, Fehlerbilder, Ergebnistabelle, Auswahl und Übernahme verhalten sich wie
+  in Feature 002 spezifiziert (Quellen-Links, Duplikat-Badge, keine Speicherung ohne
+  Übernahme). Die Übernahme merkt sich die IDs der gespeicherten Leads als
+  Schritt-3-Warteschlange.
+
+## W4: Schritt 3 — Geführte Qualifizierung
+
+- Anzeige je Lead: Kopf (Name, Website-Link, „Lead n von m"), Pre-Screening-Werte
+  nur lesend mit Quell-Links, Eingabefelder ausschließlich für Kriterien mit
+  `stage !== 'prescreening'`, Live-Panel über `evaluate(profile, lead)`.
+- Aktionen: „Speichern & weiter" (persistiert via `store.saveLead`, dann nächster
+  Lead), „Überspringen" (keine Speicherung, Lead gilt als offen), „Zurück"
+  (vorheriger Lead, Eingaben des aktuellen Leads bleiben im Arbeitsspeicher).
+- Nach dem letzten Lead: Zusammenfassung (bearbeitet/übersprungen, Stufen-Verteilung
+  via `evaluate`) + Link zur Rangliste. Keine Persistenz der Zusammenfassung.
+
+## W5: Pure Logik (testverankert)
+
+- `qualificationQueue(profile, leads)` (in `core/screening.js`): Leads mit
+  `source === 'screening'` und mindestens einem Qualifizierungskriterium ohne Wert;
+  Bestandsreihenfolge; wirft nie.
+- `model.js`: `searchHint` optional, String, getrimmt, ≤ 200 Zeichen; Validierung
+  lehnt andere Typen ab; `migrateProfile` ergänzt `''`.
+- `profile-io.js`: Export schreibt `searchHint` (auch leer zulässig, dann weglassen
+  erlaubt); Import: fehlend ⇒ `''`, Nicht-String ⇒ Fehler; `schemaVersion` bleibt 2.
+- Erweiterter SC-004-Anker: Der serialisierte Request enthält (a) weiterhin keine
+  Gewichte/Punkte/Stufen/Leads/Profilnamen und (b) keinen `searchHint` eines
+  Qualifizierungskriteriums; der `searchHint` eines Pre-Screening-Kriteriums ist
+  enthalten.

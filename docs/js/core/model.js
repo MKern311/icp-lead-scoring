@@ -24,7 +24,7 @@ export function createProfile(name = '') {
 }
 
 export function createCriterion(type) {
-  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false, stage: 'qualification' };
+  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false, stage: 'qualification', searchHint: '' };
   switch (type) {
     case 'select':
       base.rules = {
@@ -57,12 +57,14 @@ export function createLead(profileId) {
   return { id: uuid(), profileId, name: '', note: '', values: {}, source: 'manual' };
 }
 
-// Migration für Profile aus Feature-001-Beständen/-Exporten: Kriterien ohne
-// (gültige) Phase erhalten die sichere Voreinstellung „qualification". Idempotent.
+// Migration für Profile aus älteren Beständen/Exporten: Kriterien ohne (gültige)
+// Phase erhalten die sichere Voreinstellung „qualification", fehlendes searchHint
+// wird leer ergänzt. Idempotent.
 export function migrateProfile(profile) {
   if (profile?.criteria) {
     for (const c of profile.criteria) {
       if (!STAGES.includes(c.stage)) c.stage = 'qualification';
+      if (typeof c.searchHint !== 'string') c.searchHint = '';
     }
   }
   return profile;
@@ -102,6 +104,9 @@ function validateCriterion(c, idx, errors) {
   if (c.description && !strOk(c.description, 0, 500)) errors.push({ field, message: `${label}: Beschreibung zu lang (max. 500 Zeichen).` });
   if (!CRITERION_TYPES.includes(c.type)) { errors.push({ field, message: `${label}: unbekannter Typ.` }); return; }
   if (!STAGES.includes(c.stage)) errors.push({ field, message: `${label}: ungültige Screening-Phase.` });
+  if (c.searchHint !== undefined && (typeof c.searchHint !== 'string' || c.searchHint.length > 200)) {
+    errors.push({ field, message: `${label}: Suchhinweis muss Text mit max. 200 Zeichen sein.` });
+  }
   if (!inRange(c.weight, 0, 100)) errors.push({ field, message: `${label}: Gewichtung muss zwischen 0 und 100 liegen.` });
 
   const r = c.rules || {};

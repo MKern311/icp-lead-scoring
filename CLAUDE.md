@@ -11,6 +11,8 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Feature 001: `specs/001-icp-lead-scoring/` (Scoring-Kern, CSV, Profile)
 - Feature 002: `specs/002-online-screening/` (Kriterien-Phasen, Online-Pre-Screening;
   Screening-Regeln fixiert in `contracts/screening.md`)
+- Feature 003: `specs/003-guided-workflow/` (geführter 3-Schritte-Workflow auf
+  `#/screening`, Suchhinweise je Kriterium; Regeln in `contracts/workflow.md`)
 
 ## Stack & Regeln
 
@@ -21,9 +23,12 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Persistenz ausschließlich über `docs/js/store.js` (localStorage, Namespace `icp.v1.*`);
   Bewertungen werden nie gespeichert, immer via `evaluate(profile, lead)` berechnet
 - Screening: Kriterien haben `stage` (`prescreening` = online recherchierbar,
-  `qualification` = 2. Screening; Default qualification). `core/screening.js` ist pure und
-  darf nur Pre-Screening-Kriterien serialisieren (testverankert, SC-004); die KI liefert
-  nur Rohwerte + Quellen, nie Punkte. API-Schlüssel unter `icp.v1.apikey`, nie exportieren.
+  `qualification` = 2. Screening; Default qualification) und optional `searchHint`
+  (Freitext ≤ 200 Zeichen, nur für Pre-Screening serialisiert). `core/screening.js` ist
+  pure und darf nur Pre-Screening-Kriterien serialisieren (testverankert, SC-004); die KI
+  liefert nur Rohwerte + Quellen, nie Punkte. API-Schlüssel unter `icp.v1.apikey`, nie
+  exportieren. Die Route `#/screening` rendert den geführten Workflow (`ui/workflow.js`,
+  3 Schritte); `qualificationQueue` bestimmt offene Screening-Leads für Schritt 3.
 - Tests: `node --test tests/` (Node ≥ 20); Scoring-Regeln sind in
   `specs/001-icp-lead-scoring/contracts/scoring-engine.md` fixiert — Änderungen dort zuerst
 - UI-Texte deutsch, Code-Bezeichner englisch; Nutzereingaben beim Rendern immer escapen

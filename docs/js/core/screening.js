@@ -100,7 +100,11 @@ export function buildScreeningRequest(profile, { region = 'DACH', count = 20, hi
 
   const criteriaLines = criteria.map((c, i) => {
     const desc = c.description ? ` — ${c.description}` : '';
-    return `${key(i)}: ${c.name}${desc}\n   Erwarteter Wert: ${valueDescription(c)}`;
+    // Suchhinweis (Feature 003): frei formulierter Suchparameter je Kriterium —
+    // nur Pre-Screening-Kriterien erreichen diese Stelle (Filter oben, SC-004).
+    const hint = typeof c.searchHint === 'string' && c.searchHint.trim()
+      ? `\n   Suchhinweis: ${c.searchHint.trim()}` : '';
+    return `${key(i)}: ${c.name}${desc}\n   Erwarteter Wert: ${valueDescription(c)}${hint}`;
   }).join('\n');
 
   const userText = `Finde ${n} Unternehmen in der Region ${region}, die zu folgendem Suchprofil passen.
@@ -118,6 +122,16 @@ Recherchiere mit der Websuche und liefere das Ergebnis exakt im vorgegebenen JSO
     tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: MAX_WEB_SEARCHES }],
     messages: [{ role: 'user', content: userText }],
   };
+}
+
+// Schritt-3-Warteschlange des Workflows (contracts/workflow.md W5): Screening-Leads,
+// bei denen mindestens ein Qualifizierungskriterium noch keinen Wert hat. Wirft nie.
+export function qualificationQueue(profile, leads) {
+  const qual = Array.isArray(profile?.criteria)
+    ? profile.criteria.filter((c) => c.stage !== 'prescreening') : [];
+  if (qual.length === 0 || !Array.isArray(leads)) return [];
+  return leads.filter((l) => l?.source === 'screening'
+    && qual.some((c) => l.values?.[c.id] === undefined));
 }
 
 const cleanUrl = (s) => (typeof s === 'string' && s.trim() ? s.trim() : null);

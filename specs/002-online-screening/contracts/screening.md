@@ -15,12 +15,19 @@ prescreeningCriteria(profile) → Criterion[]                              // st
 
 1. `buildScreeningRequest` serialisiert **ausschließlich**: Name/Beschreibung des Profils?
    — NEIN: nur die **Pre-Screening-Kriterien** (Name, Beschreibung, Typ, Ausprägungen/
-   Bereiche/Skala), Region, Anzahl (5–50), optionale Hinweise. Profilname, qualitative
-   Kriterien, Gewichte, Punktwerte, Stufen, Leads und Bewertungen kommen im Request-JSON
-   **nicht vor** (testverankert: `JSON.stringify(request)` enthält keinen Namen eines
-   Qualifizierungs-Kriteriums, keine `points`/`weight`-Werte, keine Lead-Daten).
+   Bereiche/Skala, optionaler `searchHint`), Region, Anzahl (5–50), optionale Hinweise.
+   Profilname, qualitative Kriterien, Gewichte, Punktwerte, Stufen, Leads und Bewertungen
+   kommen im Request-JSON **nicht vor** (testverankert: `JSON.stringify(request)` enthält
+   keinen Namen eines Qualifizierungs-Kriteriums, keine `points`/`weight`-Werte, keine
+   Lead-Daten).
    *Begründung Gewichte/Punkte: die Recherche braucht nur Ausprägungen; Punktregeln sind
    Geschäftslogik und bleiben lokal (Constitution II).*
+1a. **Suchhinweise (Feature 003)**: Hat ein Pre-Screening-Kriterium einen nicht-leeren
+   `searchHint`, wird an seine Kriterienzeile `Suchhinweis: <text>` angehängt.
+   Suchhinweise von Qualifizierungskriterien erscheinen **nie** im Request
+   (testverankert, erweiterter SC-004-Anker). Suchhinweise sind Suchparameter im Sinne
+   von Constitution III (c) und enthalten strukturell keine Gewichte/Punkte — der
+   Request-Builder liest diese Felder nicht.
 2. Request-Gestalt:
    - `model: "claude-opus-5"`, `max_tokens: 16000`
    - kein `thinking`, keine `temperature`/`top_p`/`top_k`

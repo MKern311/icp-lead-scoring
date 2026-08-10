@@ -143,6 +143,32 @@ test('migrateProfile: ergänzt fehlende Phase mit „qualification", idempotent,
   assert.equal(p.criteria[1].stage, 'prescreening');
 });
 
+test('createCriterion: searchHint startet leer', () => {
+  assert.equal(createCriterion('select').searchHint, '');
+});
+
+test('validateProfile: searchHint — Text bis 200 Zeichen ok, zu lang oder Nicht-String ist Fehler', () => {
+  const p = validProfile();
+  p.criteria[0].searchHint = 'bevorzugt 50–250 Mitarbeiter';
+  assert.deepEqual(validateProfile(p).errors, []);
+  p.criteria[0].searchHint = 'x'.repeat(201);
+  assert.ok(validateProfile(p).errors.some((e) => e.message.includes('Suchhinweis')));
+  p.criteria[0].searchHint = 42;
+  assert.ok(validateProfile(p).errors.some((e) => e.message.includes('Suchhinweis')));
+});
+
+test('migrateProfile: ergänzt fehlendes searchHint als leer, idempotent, erhält gesetzte Werte', () => {
+  const p = validProfile();
+  delete p.criteria[0].searchHint;
+  p.criteria[1].searchHint = 'Hinweis';
+  migrateProfile(p);
+  assert.equal(p.criteria[0].searchHint, '');
+  assert.equal(p.criteria[1].searchHint, 'Hinweis');
+  migrateProfile(p);
+  assert.equal(p.criteria[0].searchHint, '');
+  assert.equal(p.criteria[1].searchHint, 'Hinweis');
+});
+
 test('weightSum summiert Gewichte', () => {
   assert.equal(weightSum(validProfile()), 100);
 });

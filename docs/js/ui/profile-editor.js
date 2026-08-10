@@ -137,6 +137,10 @@ function criterionCard(c, index) {
       ${c.knockout ? '<div class="hint">K.o.: Erreicht ein Lead hier weniger als 1 Punkt, ist er disqualifiziert — unabhängig von der Gesamtpunktzahl.</div>' : ''}
       <div class="field"><label>Beschreibung</label>
         <input type="text" maxlength="500" data-bind="c:${c.id}:description" value="${esc(c.description || '')}" placeholder="Optional: Was wird hier bewertet?"></div>
+      ${c.stage === 'prescreening' ? `
+      <div class="field"><label>Suchhinweis für das Online-Screening (optional)</label>
+        <input type="text" maxlength="200" data-bind="c:${c.id}:searchHint" value="${esc(c.searchHint || '')}" placeholder="z. B. bevorzugt 50–250 Mitarbeiter">
+        <div class="hint">Wird bei der Recherche mit übertragen — niemals Gewichte oder Punktwerte.</div></div>` : ''}
       ${rulesEditor(c)}
     </div>`;
 }
@@ -204,7 +208,8 @@ function handleBind(el, soft = false) {
     const key = parts[2];
     if (key === 'name') c.name = el.value;
     else if (key === 'description') c.description = el.value;
-    else if (key === 'stage') c.stage = el.value;
+    else if (key === 'stage') { c.stage = el.value; draw(); } // Suchhinweis-Feld ein-/ausblenden, Wert bleibt erhalten
+    else if (key === 'searchHint') c.searchHint = el.value;
     else if (key === 'knockout') c.knockout = el.checked;
     else if (key === 'weight') { const v = num(el); if (v !== null) c.weight = v; updateWeightSum(); }
     else if (key === 'opt') {

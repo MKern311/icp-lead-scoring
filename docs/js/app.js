@@ -6,7 +6,7 @@ import * as profileEditor from './ui/profile-editor.js';
 import * as leadList from './ui/lead-list.js';
 import * as leadForm from './ui/lead-form.js';
 import * as importWizard from './ui/import-wizard.js';
-import * as screening from './ui/screening.js';
+import * as workflow from './ui/workflow.js';
 
 // --- Gemeinsame Helfer (von allen Views importiert) ---
 
@@ -94,7 +94,7 @@ const routes = [
   { pattern: /^#\/leads$/, section: 'view-lead-list', mod: () => leadList, nav: 'leads' },
   { pattern: /^#\/lead\/([\w-]+)$/, section: 'view-lead-form', mod: () => leadForm, nav: 'leads' },
   { pattern: /^#\/import$/, section: 'view-import', mod: () => importWizard, nav: 'import' },
-  { pattern: /^#\/screening$/, section: 'view-screening', mod: () => screening, nav: 'screening' },
+  { pattern: /^#\/screening$/, section: 'view-screening', mod: () => workflow, nav: 'screening' },
 ];
 
 function router() {

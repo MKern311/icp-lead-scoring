@@ -4,7 +4,7 @@ import { createProfile, createCriterion, createTier } from '../docs/js/core/mode
 import { evaluate } from '../docs/js/core/scoring.js';
 import {
   prescreeningCriteria, buildScreeningRequest, parseCandidates, candidateToLead,
-  SCREENING_MODEL,
+  qualificationQueue, SCREENING_MODEL,
 } from '../docs/js/core/screening.js';
 
 function fixture() {
@@ -95,6 +95,41 @@ test('buildScreeningRequest: Anzahl wird auf 5–50 begrenzt, wirft ohne Pre-Scr
   c.name = 'Nur Qualifizierung';
   empty.criteria = [c];
   assert.throws(() => buildScreeningRequest(empty, {}));
+});
+
+test('Suchhinweise: nur Pre-Screening-Hints im Request, Qualifizierungs-Hints nie (SC-004 erweitert)', () => {
+  const f = fixture();
+  f.branche.searchHint = 'Fokus auf B2B-Software';
+  f.budget.searchHint = 'QUALI-HINWEIS-DARF-NICHT-RAUS';
+  const s = JSON.stringify(buildScreeningRequest(f.p, {}));
+  assert.ok(s.includes('Suchhinweis: Fokus auf B2B-Software'));
+  assert.ok(!s.includes('QUALI-HINWEIS-DARF-NICHT-RAUS'), 'Suchhinweis eines Qualifizierungskriteriums darf nie übertragen werden');
+});
+
+test('Suchhinweise: leerer oder nur-Whitespace-Hint erzeugt keine Hinweis-Zeile', () => {
+  const f = fixture();
+  f.branche.searchHint = '   ';
+  const s = JSON.stringify(buildScreeningRequest(f.p, {}));
+  assert.ok(!s.includes('Suchhinweis:'));
+});
+
+test('qualificationQueue: nur Screening-Leads mit offenen Qualifizierungskriterien, Bestandsreihenfolge', () => {
+  const f = fixture();
+  const open = { id: 'l1', profileId: f.p.id, name: 'Offen', values: {}, source: 'screening' };
+  const done = { id: 'l2', profileId: f.p.id, name: 'Fertig', values: { [f.budget.id]: false }, source: 'screening' };
+  const manual = { id: 'l3', profileId: f.p.id, name: 'Manuell', values: {}, source: 'manual' };
+  const csv = { id: 'l4', profileId: f.p.id, name: 'CSV', values: {}, source: 'csv' };
+  const open2 = { id: 'l5', profileId: f.p.id, name: 'Offen 2', values: { [f.branche.id]: 'saas' }, source: 'screening' };
+  const queue = qualificationQueue(f.p, [open, done, manual, csv, open2]);
+  assert.deepEqual(queue.map((l) => l.id), ['l1', 'l5']);
+});
+
+test('qualificationQueue: wirft nie bei leeren oder kaputten Eingaben', () => {
+  const f = fixture();
+  assert.deepEqual(qualificationQueue(f.p, []), []);
+  assert.deepEqual(qualificationQueue(f.p, null), []);
+  assert.deepEqual(qualificationQueue(null, [{ id: 'x' }]), []);
+  assert.deepEqual(qualificationQueue(f.p, [{ id: 'x', source: 'screening' }]).map((l) => l.id), ['x']);
 });
 
 function sampleOutput({ p, branche, mitarbeiter, reife }) {

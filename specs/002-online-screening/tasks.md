@@ -35,6 +35,10 @@ SC-004-Verankerung), Parsing, Kandidat→Lead, Export-Roundtrip v2.
 - [X] T115 [P] Regressionslauf `node --test tests/*.test.js` (SC-006) + Syntax-Check aller Module
 - [X] T116 [P] README.md + CLAUDE.md um Screening/Phasen ergänzen (inkl. Kosten-/Schlüssel-Hinweis)
 - [ ] T117 Manuelle Validierung: Quickstart-Szenarien Feature 001 (Regression) + neue Szenarien US1–US3 mit echtem API-Schlüssel — **Nutzer-Task**
+  - 2026-08-10: API-Pfad end-to-end mit echtem Schlüssel validiert (Skript über die
+    App-Module, Vorlage B2B-Dienstleistung, DACH, 5 Kandidaten): SC-004 am Live-Request
+    bestätigt, 173 s, 18 Websuchen, ≈ 0,96 USD, 5/5 Kandidaten mit Quellen, 0 Warnungen.
+    Offen: Klick-Durchlauf der UI-Szenarien im Browser durch den Nutzer.
 - [X] T118 Commit auf `main`
 
 ## Dependencies

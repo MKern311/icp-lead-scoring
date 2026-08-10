@@ -46,6 +46,7 @@
         "weight": { "type": "number", "minimum": 0, "maximum": 100 },
         "knockout": { "type": "boolean" },
         "stage": { "enum": ["prescreening", "qualification"] },
+        "searchHint": { "type": "string", "maxLength": 200 },
         "rules": {
           "oneOf": [
             {

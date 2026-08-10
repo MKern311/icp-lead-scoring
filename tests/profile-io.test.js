@@ -114,6 +114,30 @@ test('importProfile lehnt ungültige Phase ab', () => {
   assert.ok(errors.some((e) => e.includes('Phase')));
 });
 
+test('searchHint überlebt den Roundtrip; leere Hints werden nicht exportiert', () => {
+  const original = sampleProfile();
+  original.criteria[0].stage = 'prescreening';
+  original.criteria[0].searchHint = 'bevorzugt DACH-Mittelstand';
+  const out = exportProfile(original);
+  assert.equal(out.schemaVersion, 2);
+  assert.equal(out.profile.criteria[0].searchHint, 'bevorzugt DACH-Mittelstand');
+  assert.equal('searchHint' in out.profile.criteria[1], false);
+  const { profile: imported, errors } = importProfile(out);
+  assert.deepEqual(errors, []);
+  assert.equal(imported.criteria[0].searchHint, 'bevorzugt DACH-Mittelstand');
+  assert.equal(imported.criteria[1].searchHint, '');
+});
+
+test('importProfile: fehlendes searchHint ⇒ leer, Nicht-String wird abgelehnt', () => {
+  const out = exportProfile(sampleProfile());
+  const { profile } = importProfile(out);
+  assert.ok(profile.criteria.every((c) => c.searchHint === ''));
+  out.profile.criteria[0].searchHint = 42;
+  const rejected = importProfile(out);
+  assert.equal(rejected.profile, null);
+  assert.ok(rejected.errors.some((e) => e.includes('Suchhinweis')));
+});
+
 test('importProfile akzeptiert nur Objekte', () => {
   assert.equal(importProfile('kein objekt').profile, null);
   assert.equal(importProfile(null).profile, null);

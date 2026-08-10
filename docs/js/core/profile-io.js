@@ -20,6 +20,8 @@ export function exportProfile(profile, appVersion = '2') {
         weight: c.weight,
         knockout: !!c.knockout,
         stage: STAGES.includes(c.stage) ? c.stage : 'qualification',
+        // Suchhinweis nur schreiben, wenn gesetzt — leere Felder blähen Exporte nicht auf
+        ...(typeof c.searchHint === 'string' && c.searchHint.trim() ? { searchHint: c.searchHint } : {}),
         rules: exportRules(c),
       })),
       tiers: profile.tiers.map((t) => ({ label: t.label, minScore: t.minScore })),
@@ -72,6 +74,9 @@ export function importProfile(data) {
     if (!isNum(c.weight) || c.weight < 0 || c.weight > 100) errors.push(`${label}: Gewichtung 0–100 erforderlich.`);
     if (typeof c.knockout !== 'boolean') errors.push(`${label}: Feld „knockout" (true/false) erforderlich.`);
     if (c.stage !== undefined && !STAGES.includes(c.stage)) errors.push(`${label}: ungültige Screening-Phase „${c.stage}".`);
+    if (c.searchHint !== undefined && (typeof c.searchHint !== 'string' || c.searchHint.length > 200)) {
+      errors.push(`${label}: Suchhinweis muss Text mit max. 200 Zeichen sein.`);
+    }
 
     const r = c.rules;
     let rules = null;
@@ -112,6 +117,7 @@ export function importProfile(data) {
         knockout: c.knockout === true,
         // v1-Exporte kennen keine Phase — sichere Voreinstellung (FR-002)
         stage: STAGES.includes(c.stage) ? c.stage : 'qualification',
+        searchHint: typeof c.searchHint === 'string' ? c.searchHint : '',
         rules,
       });
     }
