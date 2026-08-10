@@ -7,6 +7,9 @@ export function uuid() {
 
 export const CRITERION_TYPES = ['select', 'range', 'boolean', 'scale'];
 export const MISSING_POLICIES = ['neutral', 'zero'];
+// Screening-Phasen: prescreening = online recherchierbar, qualification = 2. Screening
+// (manuell). Sichere Voreinstellung ist qualification — nichts wird ungefragt übertragen.
+export const STAGES = ['prescreening', 'qualification'];
 
 export function createProfile(name = '') {
   return {
@@ -21,7 +24,7 @@ export function createProfile(name = '') {
 }
 
 export function createCriterion(type) {
-  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false };
+  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false, stage: 'qualification' };
   switch (type) {
     case 'select':
       base.rules = {
@@ -52,6 +55,17 @@ export function createTier(label, minScore) {
 
 export function createLead(profileId) {
   return { id: uuid(), profileId, name: '', note: '', values: {}, source: 'manual' };
+}
+
+// Migration für Profile aus Feature-001-Beständen/-Exporten: Kriterien ohne
+// (gültige) Phase erhalten die sichere Voreinstellung „qualification". Idempotent.
+export function migrateProfile(profile) {
+  if (profile?.criteria) {
+    for (const c of profile.criteria) {
+      if (!STAGES.includes(c.stage)) c.stage = 'qualification';
+    }
+  }
+  return profile;
 }
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -87,6 +101,7 @@ function validateCriterion(c, idx, errors) {
   if (!strOk(c.name, 1, 80)) errors.push({ field, message: `${label}: Name ist Pflicht (max. 80 Zeichen).` });
   if (c.description && !strOk(c.description, 0, 500)) errors.push({ field, message: `${label}: Beschreibung zu lang (max. 500 Zeichen).` });
   if (!CRITERION_TYPES.includes(c.type)) { errors.push({ field, message: `${label}: unbekannter Typ.` }); return; }
+  if (!STAGES.includes(c.stage)) errors.push({ field, message: `${label}: ungültige Screening-Phase.` });
   if (!inRange(c.weight, 0, 100)) errors.push({ field, message: `${label}: Gewichtung muss zwischen 0 und 100 liegen.` });
 
   const r = c.rules || {};

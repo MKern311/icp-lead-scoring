@@ -51,7 +51,7 @@ function draw() {
         <button class="btn btn-primary" data-action="save">Speichern</button>
       </div>
     </div>
-    <p class="muted">Profil: <strong>${esc(profile.name)}</strong></p>
+    <p class="muted">Profil: <strong>${esc(profile.name)}</strong>${working.website ? ` · Website des Leads: <a href="${esc(working.website)}" target="_blank" rel="noopener noreferrer">${esc(working.website)}</a>` : ''}</p>
     <div class="two-col">
       <div>
         <div class="card">
@@ -66,7 +66,7 @@ function draw() {
         </div>
         <div class="card">
           <h2>Kriterien</h2>
-          ${profile.criteria.map((c) => criterionField(c)).join('')}
+          ${criteriaGroups()}
         </div>
       </div>
       <div class="card score-panel" id="score-panel"></div>
@@ -83,6 +83,20 @@ function draw() {
     btn.addEventListener('click', () => handleAction(btn.dataset.action));
   });
   updateScore();
+}
+
+// Zweistufiges Screening: Felder nach Phase gruppiert (FR-003)
+function criteriaGroups() {
+  const pre = profile.criteria.filter((c) => c.stage === 'prescreening');
+  const qual = profile.criteria.filter((c) => c.stage !== 'prescreening');
+  const parts = [];
+  if (pre.length > 0) {
+    parts.push(`<h3>Pre-Screening</h3>${pre.map((c) => criterionField(c)).join('')}`);
+  }
+  if (qual.length > 0) {
+    parts.push(`<h3>Qualifizierung — 2. Screening</h3>${qual.map((c) => criterionField(c)).join('')}`);
+  }
+  return parts.join('');
 }
 
 function criterionField(c) {
@@ -110,11 +124,15 @@ function criterionField(c) {
       input = `<input type="number" step="1" min="${c.rules.min}" max="${c.rules.max}" data-criterion="${c.id}" value="${value ?? ''}" placeholder="${c.rules.min}–${c.rules.max}">`;
       break;
   }
+  const source = working.sources?.[c.id]
+    ? `<div class="hint">Quelle: <a href="${esc(working.sources[c.id])}" target="_blank" rel="noopener noreferrer">${esc(working.sources[c.id])}</a></div>`
+    : '';
   return `
     <div class="field">
       <label>${esc(c.name)}${koBadge}</label>
       ${c.description ? `<div class="hint">${esc(c.description)}</div>` : ''}
       ${input}
+      ${source}
     </div>`;
 }
 

@@ -1,12 +1,12 @@
 // Profil-Export/-Import — Format fixiert in contracts/profile-export.schema.json.
 // Export enthält keine IDs und keine Leads; Import vergibt stets neue IDs.
 
-import { uuid, CRITERION_TYPES, MISSING_POLICIES, validateProfile } from './model.js';
+import { uuid, CRITERION_TYPES, MISSING_POLICIES, STAGES, validateProfile } from './model.js';
 
-export function exportProfile(profile, appVersion = '1') {
+export function exportProfile(profile, appVersion = '2') {
   return {
     format: 'icp-profile',
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: new Date().toISOString(),
     appVersion,
     profile: {
@@ -19,6 +19,7 @@ export function exportProfile(profile, appVersion = '1') {
         type: c.type,
         weight: c.weight,
         knockout: !!c.knockout,
+        stage: STAGES.includes(c.stage) ? c.stage : 'qualification',
         rules: exportRules(c),
       })),
       tiers: profile.tiers.map((t) => ({ label: t.label, minScore: t.minScore })),
@@ -52,7 +53,7 @@ export function importProfile(data) {
   const errors = [];
   if (!isObj(data)) return { profile: null, errors: ['Die Datei enthält kein gültiges Objekt.'] };
   if (data.format !== 'icp-profile') return { profile: null, errors: ['Unbekanntes Datei-Format — erwartet wird ein ICP-Profil-Export.'] };
-  if (data.schemaVersion !== 1) return { profile: null, errors: [`Nicht unterstützte Schema-Version: ${data.schemaVersion}.`] };
+  if (data.schemaVersion !== 1 && data.schemaVersion !== 2) return { profile: null, errors: [`Nicht unterstützte Schema-Version: ${data.schemaVersion}.`] };
   const p = data.profile;
   if (!isObj(p)) return { profile: null, errors: ['Feld „profile" fehlt oder ist ungültig.'] };
 
@@ -70,6 +71,7 @@ export function importProfile(data) {
     if (!CRITERION_TYPES.includes(c.type)) { errors.push(`${label}: unbekannter Typ „${c.type}".`); return; }
     if (!isNum(c.weight) || c.weight < 0 || c.weight > 100) errors.push(`${label}: Gewichtung 0–100 erforderlich.`);
     if (typeof c.knockout !== 'boolean') errors.push(`${label}: Feld „knockout" (true/false) erforderlich.`);
+    if (c.stage !== undefined && !STAGES.includes(c.stage)) errors.push(`${label}: ungültige Screening-Phase „${c.stage}".`);
 
     const r = c.rules;
     let rules = null;
@@ -108,6 +110,8 @@ export function importProfile(data) {
         type: c.type,
         weight: c.weight,
         knockout: c.knockout === true,
+        // v1-Exporte kennen keine Phase — sichere Voreinstellung (FR-002)
+        stage: STAGES.includes(c.stage) ? c.stage : 'qualification',
         rules,
       });
     }

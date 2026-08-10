@@ -18,6 +18,7 @@ export const templates = [
           type: 'select',
           weight: 25,
           knockout: false,
+          stage: 'prescreening',
           rules: {
             options: [
               { label: 'IT / Software', points: 100 },
@@ -34,6 +35,7 @@ export const templates = [
           type: 'range',
           weight: 20,
           knockout: false,
+          stage: 'prescreening',
           rules: {
             ranges: [
               { min: 1, max: 9, points: 30 },
@@ -49,6 +51,7 @@ export const templates = [
           type: 'boolean',
           weight: 25,
           knockout: true,
+          stage: 'qualification',
           rules: { pointsYes: 100, pointsNo: 0 },
         },
         {
@@ -57,6 +60,7 @@ export const templates = [
           type: 'scale',
           weight: 15,
           knockout: false,
+          stage: 'qualification',
           rules: { min: 1, max: 5 },
         },
         {
@@ -65,6 +69,7 @@ export const templates = [
           type: 'select',
           weight: 15,
           knockout: false,
+          stage: 'qualification',
           rules: {
             options: [
               { label: 'Sofort', points: 100 },
@@ -97,6 +102,7 @@ export const templates = [
           type: 'range',
           weight: 20,
           knockout: false,
+          stage: 'prescreening',
           rules: {
             ranges: [
               { min: 1, max: 10, points: 40 },
@@ -112,6 +118,7 @@ export const templates = [
           type: 'boolean',
           weight: 20,
           knockout: true,
+          stage: 'qualification',
           rules: { pointsYes: 100, pointsNo: 0 },
         },
         {
@@ -120,6 +127,7 @@ export const templates = [
           type: 'select',
           weight: 25,
           knockout: false,
+          stage: 'prescreening',
           rules: {
             options: [
               { label: 'Technologie', points: 100 },
@@ -135,6 +143,7 @@ export const templates = [
           type: 'scale',
           weight: 20,
           knockout: false,
+          stage: 'qualification',
           rules: { min: 1, max: 10 },
         },
         {
@@ -143,6 +152,7 @@ export const templates = [
           type: 'select',
           weight: 15,
           knockout: false,
+          stage: 'qualification',
           rules: {
             options: [
               { label: 'Keine', points: 100 },

@@ -1,6 +1,6 @@
 // Einzige Persistenzschicht — alle localStorage-Zugriffe laufen hier durch (data-model.md).
 
-import { uuid } from './core/model.js';
+import { uuid, migrateProfile } from './core/model.js';
 
 const NS = 'icp.v1.';
 
@@ -26,7 +26,7 @@ const now = () => new Date().toISOString();
 // --- Profile ---
 
 export function listProfiles() {
-  return read('profiles', []);
+  return read('profiles', []).map(migrateProfile);
 }
 
 export function getProfile(id) {
@@ -172,6 +172,20 @@ function setRecalcFlag(profileId) {
   const s = getSettings();
   s.recalc = { ...(s.recalc || {}), [profileId]: true };
   setSettings(s);
+}
+
+// --- API-Schlüssel (Screening) — eigener Key, niemals Teil von Exporten ---
+
+export function getApiKey() {
+  return localStorage.getItem(`${NS}apikey`) || null;
+}
+
+export function setApiKey(key) {
+  localStorage.setItem(`${NS}apikey`, key.trim());
+}
+
+export function clearApiKey() {
+  localStorage.removeItem(`${NS}apikey`);
 }
 
 // true genau einmal nach einer Profiländerung — die UI zeigt dann den Hinweis.

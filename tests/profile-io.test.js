@@ -25,10 +25,11 @@ function sampleProfile() {
   return p;
 }
 
-test('exportProfile: Format-Kennung, schemaVersion, keine IDs, keine Leads', () => {
+test('exportProfile: Format-Kennung, schemaVersion 2, keine IDs, keine Leads', () => {
   const out = exportProfile(sampleProfile(), 'test');
   assert.equal(out.format, 'icp-profile');
-  assert.equal(out.schemaVersion, 1);
+  assert.equal(out.schemaVersion, 2);
+  assert.equal(out.profile.criteria[0].stage, 'qualification');
   assert.equal(out.profile.name, 'Export-Test');
   assert.equal('id' in out.profile, false);
   assert.equal('id' in out.profile.criteria[0], false);
@@ -85,6 +86,32 @@ test('importProfile lehnt Punkte außerhalb 0–100 ab', () => {
   const { profile, errors } = importProfile(out);
   assert.equal(profile, null);
   assert.ok(errors.length > 0);
+});
+
+test('Screening-Phase überlebt den Roundtrip', () => {
+  const original = sampleProfile();
+  original.criteria[0].stage = 'prescreening';
+  const { profile: imported, errors } = importProfile(exportProfile(original));
+  assert.deepEqual(errors, []);
+  assert.equal(imported.criteria[0].stage, 'prescreening');
+  assert.equal(imported.criteria[1].stage, 'qualification');
+});
+
+test('importProfile akzeptiert v1-Exporte ohne Phase (Default „qualification")', () => {
+  const out = exportProfile(sampleProfile());
+  out.schemaVersion = 1;
+  for (const c of out.profile.criteria) delete c.stage;
+  const { profile, errors } = importProfile(out);
+  assert.deepEqual(errors, []);
+  assert.ok(profile.criteria.every((c) => c.stage === 'qualification'));
+});
+
+test('importProfile lehnt ungültige Phase ab', () => {
+  const out = exportProfile(sampleProfile());
+  out.profile.criteria[0].stage = 'bogus';
+  const { profile, errors } = importProfile(out);
+  assert.equal(profile, null);
+  assert.ok(errors.some((e) => e.includes('Phase')));
 });
 
 test('importProfile akzeptiert nur Objekte', () => {

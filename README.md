@@ -12,9 +12,19 @@ Alle Daten bleiben lokal im Browser; es gibt kein Konto und keine Telemetrie.
 - **Leads bewerten**: einzeln mit Live-Ergebnis oder massenhaft per CSV-Import mit
   Spaltenzuordnung; jede Punktzahl ist bis auf Kriterienebene aufgeschlüsselt
 - **Rangliste**: sortieren, filtern, als Excel-taugliche CSV exportieren (Semikolon, UTF-8-BOM)
+- **Zweistufiges Screening**: Kriterien sind einer Phase zugeordnet — **Pre-Screening**
+  (firmografisch, online recherchierbar) oder **Qualifizierung** (2. Screening, manuell
+  im Kundenkontakt)
+- **Online-Screening** *(optional)*: Mit eigenem Anthropic-API-Schlüssel recherchiert das
+  Tool per KI-Websuche Unternehmen, die zu den Pre-Screening-Kriterien passen (Region und
+  Anzahl wählbar), inkl. Quellen-URLs je Angabe; Kandidaten werden geprüft und selektiv als
+  Leads übernommen. Der Schlüssel bleibt lokal; übertragen werden nur die
+  Pre-Screening-Kriterien, nie Leads oder Bewertungen. Der Lauf kostet über den eigenen
+  Schlüssel grob 0,50–1,50 €.
 - **Generik**: Profile als JSON-Datei exportieren/importieren — andere Nutzer erhalten
   identische Bewertungslogik; zwei anpassbare Beispiel-Vorlagen sind enthalten
-- **Offline**: nach dem ersten Laden auch ohne Internetverbindung nutzbar (Service Worker)
+- **Offline-Kern**: Alle Kernfunktionen nach dem ersten Laden auch ohne Internetverbindung
+  nutzbar (Service Worker); nur das Online-Screening braucht Netz und Schlüssel
 
 ## Nutzung
 

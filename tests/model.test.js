@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createProfile, createCriterion, createTier, createLead,
-  validateProfile, weightSum, normalizeWeights,
+  validateProfile, weightSum, normalizeWeights, migrateProfile,
 } from '../docs/js/core/model.js';
 
 function validProfile() {
@@ -120,6 +120,27 @@ test('validateProfile: ungültige missingValuePolicy ist Fehler', () => {
   const p = validProfile();
   p.missingValuePolicy = 'sonstwas';
   assert.ok(validateProfile(p).errors.some((e) => e.field === 'missingValuePolicy'));
+});
+
+test('createCriterion: Screening-Phase default „qualification" (sichere Voreinstellung)', () => {
+  assert.equal(createCriterion('select').stage, 'qualification');
+});
+
+test('validateProfile: ungültige Screening-Phase ist Fehler', () => {
+  const p = validProfile();
+  p.criteria[0].stage = 'irgendwas';
+  assert.ok(validateProfile(p).errors.some((e) => e.message.includes('Phase')));
+});
+
+test('migrateProfile: ergänzt fehlende Phase mit „qualification", idempotent, erhält gesetzte Werte', () => {
+  const p = validProfile();
+  delete p.criteria[0].stage;
+  p.criteria[1].stage = 'prescreening';
+  migrateProfile(p);
+  assert.equal(p.criteria[0].stage, 'qualification');
+  assert.equal(p.criteria[1].stage, 'prescreening');
+  migrateProfile(p);
+  assert.equal(p.criteria[1].stage, 'prescreening');
 });
 
 test('weightSum summiert Gewichte', () => {

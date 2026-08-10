@@ -71,7 +71,7 @@ function draw() {
           ${result.status === 'disqualified' ? '<span class="badge badge-disqualified">Disqualifiziert</span>' : ''}
           ${result.status === 'not-evaluable' ? '<span class="badge badge-not-evaluable">Nicht bewertbar</span>' : ''}</td>
       <td>${result.complete ? 'ja' : '<span class="badge badge-incomplete">unvollständig</span>'}</td>
-      <td class="muted">${lead.source === 'csv' ? 'Import' : 'manuell'}</td>
+      <td class="muted">${lead.source === 'csv' ? 'Import' : lead.source === 'screening' ? 'Screening' : 'manuell'}</td>
     </tr>`).join('');
 
   container.innerHTML = `

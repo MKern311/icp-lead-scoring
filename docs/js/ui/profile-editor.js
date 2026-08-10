@@ -122,6 +122,11 @@ function criterionCard(c, index) {
           <input type="text" maxlength="80" data-bind="c:${c.id}:name" value="${esc(c.name)}" placeholder="z. B. Branche"></div>
         <div class="field" style="max-width:7rem"><label>Gewicht %</label>
           <input type="number" min="0" max="100" step="0.1" data-bind="c:${c.id}:weight" value="${esc(c.weight)}"></div>
+        <div class="field" style="max-width:16rem"><label>Screening-Phase</label>
+          <select data-bind="c:${c.id}:stage">
+            <option value="prescreening" ${c.stage === 'prescreening' ? 'selected' : ''}>Pre-Screening (online recherchierbar)</option>
+            <option value="qualification" ${c.stage !== 'prescreening' ? 'selected' : ''}>Qualifizierung (2. Screening)</option>
+          </select></div>
         <label style="white-space:nowrap"><input type="checkbox" data-bind="c:${c.id}:knockout" ${c.knockout ? 'checked' : ''}> K.o.-Kriterium</label>
         <div class="row-actions">
           <button class="btn btn-small" data-action="move-criterion" data-id="${c.id}" data-dir="-1" ${index === 0 ? 'disabled' : ''}>↑</button>
@@ -199,6 +204,7 @@ function handleBind(el, soft = false) {
     const key = parts[2];
     if (key === 'name') c.name = el.value;
     else if (key === 'description') c.description = el.value;
+    else if (key === 'stage') c.stage = el.value;
     else if (key === 'knockout') c.knockout = el.checked;
     else if (key === 'weight') { const v = num(el); if (v !== null) c.weight = v; updateWeightSum(); }
     else if (key === 'opt') {
