@@ -7,8 +7,8 @@
 
 import * as store from '../store.js';
 import { evaluate } from '../core/scoring.js';
-import { criterionFromCatalog } from '../core/model.js';
-import { criterionCatalog } from '../templates.js';
+import { criterionFromCatalog, profileCatalogFindings } from '../core/model.js';
+import { criterionCatalog, retiredCriterionNames } from '../templates.js';
 import {
   prescreeningCriteria, longlistCriteria,
   buildLonglistRequest, buildDeepScreeningRequest,
@@ -23,6 +23,7 @@ let container = null;
 let profile = null;
 let step = 1;
 let confirmed = new Set();                       // in dieser Sitzung aktiv bestätigte Kriterien
+let keptFindings = new Set();                    // „Behalten"-Entscheidungen der Aufräum-Box (flüchtig)
 let params = { region: 'DACH', count: 20, hints: '' };
 let running = false;                             // Longlist-Lauf aktiv
 let result = null;                               // Longlist-Ergebnis { candidates, warnings, region, selected }
@@ -41,6 +42,7 @@ export function render(section) {
     // Neueinstieg setzt die Führung zurück — gespeicherte Daten bleiben maßgeblich (FR-010)
     step = 1;
     confirmed = new Set();
+    keptFindings = new Set();
     result = null;
     deepRun = null;
     queue = [];
@@ -153,14 +155,60 @@ function drawStep1(body) {
       </div>`;
   };
 
-  // Gruppierung (FR-015): erst recherchierbare Kriterien + Katalog, dann Qualifizierung
-  const qual = profile.criteria.filter((c) => c.stage !== 'prescreening');
+  // Aufräum-Box: Kriterien aus älteren Katalog-Versionen (umbenannt/zusammengeführt/
+  // entfernt) und Dubletten — nichts wird automatisch gelöscht, jede Aktion ist ein Klick.
   const existingNames = new Set(profile.criteria.map((c) => c.name.trim().toLowerCase()));
+  const findings = profileCatalogFindings(profile, criterionCatalog, retiredCriterionNames)
+    .filter((f) => !keptFindings.has(`${f.criterionId}:${f.kind}`));
+  const cleanupBlock = findings.length > 0 ? `
+    <div class="card">
+      <h3>Aufräumen empfohlen: ${findings.length} ${findings.length === 1 ? 'Kriterium stammt' : 'Kriterien stammen'} aus einer älteren Katalog-Version</h3>
+      <p class="muted">Der Katalog wurde überarbeitet (EU-Klassen, zusammengeführte Signale).
+      Nichts wird automatisch gelöscht — „Ersetzen" übernimmt den Nachfolger mit Gewicht
+      und K.o.-Status, „Behalten" lässt das Kriterium unverändert.</p>
+      ${findings.map((f) => {
+        const successorInProfile = f.successor && existingNames.has(f.successor.trim().toLowerCase());
+        const text = f.kind === 'duplicate' ? 'Doppelt im Profil vorhanden.'
+          : f.kind === 'retired' ? 'Im überarbeiteten Katalog nicht mehr enthalten.'
+          : successorInProfile ? `Ersetzt durch „${esc(f.successor)}" — der Nachfolger ist bereits im Profil.`
+          : `Ersetzt durch „${esc(f.successor)}".`;
+        return `
+        <div class="criterion-head" style="margin-bottom: var(--space-2)">
+          <div class="field grow"><label>${esc(f.name)}</label><div class="hint">${text}</div></div>
+          <div class="row-actions">
+            ${f.kind === 'replaced' && !successorInProfile
+              ? `<button class="btn btn-small btn-primary" data-fix-replace="${f.criterionId}">Ersetzen</button>` : ''}
+            <button class="btn btn-small" data-fix-remove="${f.criterionId}">Entfernen</button>
+            <button class="btn btn-small" data-fix-keep="${f.criterionId}:${f.kind}">Behalten</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  // Gruppierung (FR-015): Pre-Screening-Kriterien nach Katalog-Kategorien geordnet
+  // (Zuordnung über Katalog-Namen inkl. früherer Namen), dann Katalog, dann Qualifizierung.
+  const qual = profile.criteria.filter((c) => c.stage !== 'prescreening');
   const suggestions = criterionCatalog
     .map((entry, idx) => ({ entry, idx }))
     .filter(({ entry }) => !existingNames.has(entry.name.trim().toLowerCase()));
 
+  const categoryOf = new Map();
+  for (const entry of criterionCatalog) {
+    categoryOf.set(entry.name.trim().toLowerCase(), entry.category);
+    for (const old of entry.replaces || []) categoryOf.set(old.trim().toLowerCase(), entry.category);
+  }
   const categories = [...new Set(criterionCatalog.map((e) => e.category))];
+  const preGroups = [
+    ...categories.map((cat) => ({
+      title: cat,
+      items: pre.filter((c) => categoryOf.get(c.name.trim().toLowerCase()) === cat),
+    })),
+    { title: 'Weitere Kriterien', items: pre.filter((c) => !categoryOf.has(c.name.trim().toLowerCase())) },
+  ].filter((g) => g.items.length > 0);
+  const preBlock = pre.length > 0
+    ? preGroups.map((g) => `<h4 class="catalog-category">${esc(g.title)}</h4>${g.items.map(criterionRow).join('')}`).join('')
+    : '<p class="muted">Noch keine Pre-Screening-Kriterien — übernehmen Sie Vorschläge aus dem Katalog oder stellen Sie unten die Phase um.</p>';
+
   const catalogBlock = suggestions.length > 0 ? `
     <div class="card">
       <h3>Vorschläge: das kann online recherchiert werden</h3>
@@ -175,9 +223,12 @@ function drawStep1(body) {
           <div class="criterion-head" style="margin-bottom: var(--space-2)">
             <div class="field grow">
               <label>${esc(entry.name)}</label>
-              <div class="hint">${esc(entry.description)}${entry.type === 'select'
-                ? ` · Klassen: ${entry.rules.options.map((o) => esc(o.label)).join(', ')}` : ''}
-                · Beleg: ${esc(entry.evidence)}</div>
+              <div class="hint">${esc(entry.description)} · Beleg: ${esc(entry.evidence)}</div>
+              ${entry.type === 'select' ? `
+              <details class="class-details">
+                <summary>${entry.rules.options.length} Klassen anzeigen</summary>
+                <div class="hint">${entry.rules.options.map((o) => esc(o.label)).join(' · ')}</div>
+              </details>` : ''}
             </div>
             <button class="btn btn-small" data-add-catalog="${idx}">+ Übernehmen</button>
           </div>`).join('')}`;
@@ -196,8 +247,9 @@ function drawStep1(body) {
         ? `<div class="notice notice-warn">Noch ${open.length} von ${profile.criteria.length} Kriterien unbestätigt.</div>`
         : '<div class="notice notice-ok" style="background:#e7f3ec;border:1px solid #bcd9c8;border-radius:var(--radius);padding:var(--space-2) var(--space-3)">Alle Kriterien bestätigt.</div>'}
     </div>
+    ${cleanupBlock}
     <h2>Online recherchierbar — Pre-Screening (${pre.length})</h2>
-    ${pre.length > 0 ? pre.map(criterionRow).join('') : '<p class="muted">Noch keine Pre-Screening-Kriterien — übernehmen Sie Vorschläge aus dem Katalog oder stellen Sie unten die Phase um.</p>'}
+    ${preBlock}
     ${catalogBlock}
     <h2>Nicht online recherchierbar — Qualifizierung, 2. Screening (${qual.length})</h2>
     ${qual.length > 0 ? qual.map(criterionRow).join('') : '<p class="muted">Keine Qualifizierungskriterien.</p>'}
@@ -264,6 +316,46 @@ function drawStep1(body) {
   body.querySelectorAll('[data-confirm]').forEach((el) => {
     el.addEventListener('click', () => {
       confirmed.add(el.dataset.confirm);
+      readParams(body);
+      draw();
+    });
+  });
+  body.querySelectorAll('[data-fix-replace]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const idx = profile.criteria.findIndex((c) => c.id === el.dataset.fixReplace);
+      if (idx < 0) return;
+      const old = profile.criteria[idx];
+      const successor = profileCatalogFindings(profile, criterionCatalog, retiredCriterionNames)
+        .find((f) => f.criterionId === old.id && f.kind === 'replaced')?.successor;
+      const entry = criterionCatalog.find((e) => e.name === successor);
+      if (!entry) return;
+      const c = criterionFromCatalog(entry);
+      c.weight = old.weight;               // Gewicht und K.o.-Status des alten Kriteriums bleiben
+      c.knockout = old.knockout;
+      profile.criteria.splice(idx, 1, c);
+      confirmed.delete(old.id);
+      confirmed.add(c.id);
+      readParams(body);
+      store.saveProfile(profile);
+      toast(`„${old.name}" durch „${c.name}" ersetzt.`);
+      draw();
+    });
+  });
+  body.querySelectorAll('[data-fix-remove]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const idx = profile.criteria.findIndex((c) => c.id === el.dataset.fixRemove);
+      if (idx < 0) return;
+      const [removed] = profile.criteria.splice(idx, 1);
+      confirmed.delete(removed.id);
+      readParams(body);
+      store.saveProfile(profile);
+      toast(`Kriterium „${removed.name}" entfernt.`);
+      draw();
+    });
+  });
+  body.querySelectorAll('[data-fix-keep]').forEach((el) => {
+    el.addEventListener('click', () => {
+      keptFindings.add(el.dataset.fixKeep);
       readParams(body);
       draw();
     });

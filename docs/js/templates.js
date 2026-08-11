@@ -11,7 +11,9 @@
 // 2003/361/EG). Signale sind einzelne, konkret belegbare Ja/Nein-Kriterien mit
 // Belegzeitraum 12 Monate; `hintLabel` markiert Kriterien mit beschriftetem
 // Freitextfeld (z. B. gesuchte Stellentitel); `evidence` nennt die Belegquellen
-// und wird bei der Übernahme an die Beschreibung angehängt.
+// und wird bei der Übernahme an die Beschreibung angehängt. `replaces` nennt
+// frühere Katalog-Namen des Eintrags — Schritt 1 erkennt darüber veraltete
+// Profil-Kriterien und bietet Ersetzen an (reine Daten, keine Automatik).
 export const criterionCatalog = [
   // --- Firmografie ---
   {
@@ -101,6 +103,7 @@ export const criterionCatalog = [
   {
     name: 'Firmenalter',
     category: 'Firmografie',
+    replaces: ['Firmenalter (Jahre)'],
     description: 'Altersklasse laut Gründungsjahr.',
     evidence: 'Registereinträge, Website (Über uns), Wikipedia',
     type: 'select',
@@ -152,6 +155,7 @@ export const criterionCatalog = [
   {
     name: 'Signal: Expansion / Investition / Wachstum',
     category: 'Wachstum & Dynamik',
+    replaces: ['Signal: Expansion / Investition', 'Wachstumssignal: Presse/News', 'Wachstumssignale'],
     description: 'Expansions-, Investitions- oder Wachstumsmeldung in den letzten 12 Monaten.',
     evidence: 'Pressemitteilungen, Wirtschafts- und Regionalmedien',
     type: 'boolean',
@@ -162,6 +166,11 @@ export const criterionCatalog = [
   {
     name: 'Stellenanzeigen (gesuchte Rollen)',
     category: 'Wachstum & Dynamik',
+    replaces: [
+      'Stellenanzeigen: aktiv', 'Stellenanzeigen: IT / Digitalisierung',
+      'Stellenanzeigen: Vertrieb / Marketing', 'Stellenanzeigen: Führungspositionen',
+      'Wachstumssignal: Stellenanzeigen',
+    ],
     description: 'Aktuell offene Stellen für die angegebenen Rollen ausgeschrieben; ohne Rollen-Angabe zählt jede offene Stelle.',
     evidence: 'Jobportale (Stepstone, Indeed, karriere.at), Karriereseite',
     type: 'boolean',
@@ -203,6 +212,7 @@ export const criterionCatalog = [
   {
     name: 'Social Media aktiv',
     category: 'Digitale Präsenz',
+    replaces: ['Online-Sichtbarkeit'],
     description: 'Beiträge auf öffentlichen Unternehmensseiten in den letzten 3 Monaten.',
     evidence: 'Öffentliche LinkedIn-/Instagram-/YouTube-Unternehmensseiten',
     type: 'boolean',
@@ -213,6 +223,7 @@ export const criterionCatalog = [
   {
     name: 'KI- / Digitalisierungsbezug',
     category: 'Digitale Präsenz',
+    replaces: ['Digitalisierungs- / KI-Reife'],
     description: 'KI oder Digitalisierung aktuell sichtbar in Website, News oder Stellenanzeigen.',
     evidence: 'Website, Presse, Stellenanzeigen',
     type: 'boolean',
@@ -236,6 +247,17 @@ export const criterionCatalog = [
       ],
     },
   },
+];
+
+// Frühere Katalog-Einträge ohne Nachfolger (Nutzer-Entscheidung 2026-08-11:
+// zu weich oder nicht relevant). Schritt 1 markiert Profil-Kriterien mit diesen
+// Namen als veraltet — entfernt wird nur auf ausdrücklichen Klick.
+export const retiredCriterionNames = [
+  'Online-Shop / Kundenportal',
+  'Website-Reife',
+  'Mehrsprachige Website',
+  'Messe-Aussteller',
+  'Kununu-Score',
 ];
 
 export const templates = [

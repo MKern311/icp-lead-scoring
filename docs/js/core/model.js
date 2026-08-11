@@ -73,6 +73,29 @@ export function criterionFromCatalog(entry) {
   return c;
 }
 
+// Abgleich Profil ↔ Katalog (pure): findet Kriterien aus älteren Katalog-Versionen
+// (umbenannt → Katalog-`replaces`, ersatzlos entfernt → retiredNames) sowie
+// namensgleiche Dubletten im Profil. Reine Analyse — jede Änderung bleibt eine
+// explizite Nutzeraktion (Constitution I/IV). Reihenfolge = Profilreihenfolge.
+export function profileCatalogFindings(profile, catalog, retiredNames = []) {
+  const norm = (s) => String(s || '').trim().toLowerCase();
+  const successorOf = new Map();
+  for (const entry of catalog || []) {
+    for (const oldName of entry.replaces || []) successorOf.set(norm(oldName), entry.name);
+  }
+  const retired = new Set((retiredNames || []).map(norm));
+  const findings = [];
+  const seen = new Map();
+  for (const c of profile?.criteria || []) {
+    const n = norm(c.name);
+    if (seen.has(n)) findings.push({ criterionId: c.id, name: c.name, kind: 'duplicate', duplicateOf: seen.get(n) });
+    else seen.set(n, c.id);
+    if (successorOf.has(n)) findings.push({ criterionId: c.id, name: c.name, kind: 'replaced', successor: successorOf.get(n) });
+    else if (retired.has(n)) findings.push({ criterionId: c.id, name: c.name, kind: 'retired' });
+  }
+  return findings;
+}
+
 export function createLead(profileId) {
   return { id: uuid(), profileId, name: '', note: '', values: {}, source: 'manual' };
 }

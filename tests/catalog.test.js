@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createProfile, createTier, criterionFromCatalog, validateProfile } from '../docs/js/core/model.js';
-import { criterionCatalog } from '../docs/js/templates.js';
+import {
+  createProfile, createCriterion, createTier, criterionFromCatalog, validateProfile,
+  profileCatalogFindings,
+} from '../docs/js/core/model.js';
+import { criterionCatalog, retiredCriterionNames } from '../docs/js/templates.js';
 import {
   prescreeningCriteria, longlistCriteria, buildDeepScreeningRequest, buildLonglistRequest,
 } from '../docs/js/core/screening.js';
@@ -108,6 +111,45 @@ test('Katalog: Namen eindeutig, Übernahme vergibt neue IDs, Quelle bleibt unmut
   if (a.rules.options) assert.notEqual(a.rules.options[0].id, b.rules.options[0].id);
   assert.equal('id' in criterionCatalog[0], false);
   assert.equal('stage' in criterionCatalog[0], false, 'stage entsteht erst bei der Übernahme');
+});
+
+test('Katalog-Aliase: replaces/retired kollidieren nicht mit aktiven Namen und sind eindeutig', () => {
+  const active = new Set(criterionCatalog.map((e) => e.name.trim().toLowerCase()));
+  const aliases = new Set();
+  for (const e of criterionCatalog) {
+    for (const old of e.replaces || []) {
+      const n = old.trim().toLowerCase();
+      assert.ok(!active.has(n), `Alias „${old}" ist noch ein aktiver Katalog-Name`);
+      assert.ok(!aliases.has(n), `Alias „${old}" ist mehrfach vergeben`);
+      aliases.add(n);
+    }
+  }
+  for (const r of retiredCriterionNames) {
+    const n = r.trim().toLowerCase();
+    assert.ok(!active.has(n), `Retired „${r}" ist noch ein aktiver Katalog-Name`);
+    assert.ok(!aliases.has(n), `Retired „${r}" ist zugleich Alias`);
+  }
+});
+
+test('profileCatalogFindings: erkennt umbenannte, entfernte und doppelte Kriterien in Profilreihenfolge', () => {
+  const p = createProfile('Aufräum-Test');
+  const mk = (name) => { const c = createCriterion('boolean'); c.name = name; return c; };
+  p.criteria = [
+    mk('Stellenanzeigen: aktiv'),          // ersetzt durch Stellenanzeigen (gesuchte Rollen)
+    mk('Kununu-Score'),                    // ersatzlos entfernt
+    mk('Signal: Führungswechsel'),         // aktiv — kein Befund
+    mk('Signal: Führungswechsel'),         // Dublette
+    mk('Eigene Qualifizierung'),           // unbekannt — kein Befund
+  ];
+  const findings = profileCatalogFindings(p, criterionCatalog, retiredCriterionNames);
+  assert.deepEqual(findings.map((f) => [f.name, f.kind]), [
+    ['Stellenanzeigen: aktiv', 'replaced'],
+    ['Kununu-Score', 'retired'],
+    ['Signal: Führungswechsel', 'duplicate'],
+  ]);
+  assert.equal(findings[0].successor, 'Stellenanzeigen (gesuchte Rollen)');
+  assert.equal(findings[2].duplicateOf, p.criteria[2].id);
+  assert.deepEqual(profileCatalogFindings(createProfile('leer'), criterionCatalog, retiredCriterionNames), []);
 });
 
 test('Katalog: Deep-Request serialisiert alle Einträge, Longlist nur die Auswahlfelder — nie Punkte/Gewichte', () => {
