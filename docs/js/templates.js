@@ -2,6 +2,112 @@
 // Vorlagen nutzen exakt dieselben Mechanismen wie Nutzerprofile, kein Sondercode).
 // Instanziierung läuft über profile-io.importProfile (neue IDs, volle Validierung).
 
+// Katalog online recherchierbarer Kriterien (Feature 003, FR-014) — reine Daten.
+// Schritt 1 des Workflows bietet sie zum Übernehmen an; Gewichte und Punktregeln
+// sind Startwerte und im Profil-Editor frei anpassbar (Verfassung I).
+export const criterionCatalog = [
+  {
+    name: 'Branche',
+    description: 'Über Website, Verzeichnisse und Presse belegbar.',
+    type: 'select',
+    weight: 15,
+    searchHint: 'Bevorzugte Branchen eintragen, z. B. IT/Software und Industrie',
+    rules: {
+      options: [
+        { label: 'IT / Software', points: 100 },
+        { label: 'Industrie / Fertigung', points: 80 },
+        { label: 'Handel / E-Commerce', points: 60 },
+        { label: 'Dienstleistung', points: 60 },
+        { label: 'Öffentlicher Sektor', points: 40 },
+        { label: 'Sonstige', points: 20 },
+      ],
+    },
+  },
+  {
+    name: 'Unternehmensgröße (Mitarbeiter)',
+    description: 'Registerdaten, Karriereseiten, Jobportale, LinkedIn-Unternehmensseite.',
+    type: 'range',
+    weight: 15,
+    searchHint: 'z. B. bevorzugt 50–250 Mitarbeiter',
+    rules: {
+      ranges: [
+        { min: 1, max: 9, points: 30 },
+        { min: 10, max: 49, points: 70 },
+        { min: 50, max: 249, points: 100 },
+        { min: 250, max: 5000, points: 60 },
+      ],
+    },
+  },
+  {
+    name: 'Region / Standort',
+    description: 'Impressum und Standortangaben der Website.',
+    type: 'select',
+    weight: 10,
+    searchHint: 'z. B. bevorzugt Süddeutschland',
+    rules: {
+      options: [
+        { label: 'Deutschland', points: 100 },
+        { label: 'Österreich', points: 80 },
+        { label: 'Schweiz', points: 80 },
+        { label: 'Sonstige', points: 20 },
+      ],
+    },
+  },
+  {
+    name: 'Umsatzklasse',
+    description: 'Öffentliche Registerdaten (z. B. Northdata) — oft nur grob belegbar.',
+    type: 'select',
+    weight: 10,
+    searchHint: 'z. B. bevorzugt 10–50 Mio. € Jahresumsatz',
+    rules: {
+      options: [
+        { label: 'unter 1 Mio. €', points: 20 },
+        { label: '1–10 Mio. €', points: 60 },
+        { label: '10–50 Mio. €', points: 100 },
+        { label: 'über 50 Mio. €', points: 70 },
+      ],
+    },
+  },
+  {
+    name: 'Firmenalter (Jahre)',
+    description: 'Gründungsjahr aus Register, Website oder Presse.',
+    type: 'range',
+    weight: 5,
+    searchHint: 'z. B. bevorzugt etablierte Unternehmen ab 10 Jahren',
+    rules: {
+      ranges: [
+        { min: 0, max: 4, points: 30 },
+        { min: 5, max: 14, points: 70 },
+        { min: 15, max: 200, points: 100 },
+      ],
+    },
+  },
+  {
+    name: 'Wachstumssignale',
+    description: 'Presse-News, Stellenanzeigen, Expansionsmeldungen der letzten 12 Monate.',
+    type: 'boolean',
+    weight: 15,
+    searchHint: 'Stellenanzeigen und News der letzten 12 Monate prüfen',
+    rules: { pointsYes: 100, pointsNo: 30 },
+  },
+  {
+    name: 'Digitalisierungs- / KI-Reife',
+    description: 'Website, Karriereseite, Tech-Stellenprofile, veröffentlichte Projekte.',
+    type: 'scale',
+    weight: 15,
+    searchHint: '1 = analog unterwegs, 5 = digital führend',
+    rules: { min: 1, max: 5 },
+  },
+  {
+    name: 'Online-Sichtbarkeit',
+    description: 'Website-Qualität und öffentlich gepflegte Social-Media-Unternehmensseiten.',
+    type: 'scale',
+    weight: 10,
+    searchHint: 'Website und öffentliche Social-Media-Präsenz (LinkedIn, Instagram, YouTube)',
+    rules: { min: 1, max: 5 },
+  },
+];
+
 export const templates = [
   {
     format: 'icp-profile',

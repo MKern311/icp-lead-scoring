@@ -29,6 +29,8 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   liefert nur Rohwerte + Quellen, nie Punkte. API-Schlüssel unter `icp.v1.apikey`, nie
   exportieren. Die Route `#/screening` rendert den geführten Workflow (`ui/workflow.js`,
   3 Schritte); `qualificationQueue` bestimmt offene Screening-Leads für Schritt 3.
+  Schritt 1 gruppiert (recherchierbar zuerst) und bietet `criterionCatalog`
+  (`templates.js`, reine Daten) per `criterionFromCatalog` zum Übernehmen an.
 - Tests: `node --test tests/` (Node ≥ 20); Scoring-Regeln sind in
   `specs/001-icp-lead-scoring/contracts/scoring-engine.md` fixiert — Änderungen dort zuerst
 - UI-Texte deutsch, Code-Bezeichner englisch; Nutzereingaben beim Rendern immer escapen

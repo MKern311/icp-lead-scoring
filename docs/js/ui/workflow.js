@@ -6,6 +6,8 @@
 
 import * as store from '../store.js';
 import { evaluate } from '../core/scoring.js';
+import { criterionFromCatalog } from '../core/model.js';
+import { criterionCatalog } from '../templates.js';
 import {
   prescreeningCriteria, buildScreeningRequest, parseCandidates, candidateToLead,
   qualificationQueue,
@@ -98,7 +100,7 @@ function drawStep1(body) {
       <button class="btn btn-small" data-action="resume">Direkt mit der Qualifizierung fortfahren</button>
     </div>` : '';
 
-  const rows = profile.criteria.map((c) => {
+  const criterionRow = (c) => {
     const isConfirmed = confirmed.has(c.id);
     const hintField = c.stage === 'prescreening' ? `
       <div class="field grow">
@@ -124,7 +126,29 @@ function drawStep1(body) {
         </div>
         ${hintField}
       </div>`;
-  }).join('');
+  };
+
+  // Gruppierung (FR-015): erst recherchierbare Kriterien + Katalog, dann Qualifizierung
+  const qual = profile.criteria.filter((c) => c.stage !== 'prescreening');
+  const existingNames = new Set(profile.criteria.map((c) => c.name.trim().toLowerCase()));
+  const suggestions = criterionCatalog
+    .map((entry, idx) => ({ entry, idx }))
+    .filter(({ entry }) => !existingNames.has(entry.name.trim().toLowerCase()));
+
+  const catalogBlock = suggestions.length > 0 ? `
+    <div class="card">
+      <h3>Vorschläge: das kann online recherchiert werden</h3>
+      <p class="muted">Per Klick als Pre-Screening-Kriterium übernehmen — Gewichte und
+      Punktregeln passen Sie danach im Profil-Editor an.</p>
+      ${suggestions.map(({ entry, idx }) => `
+        <div class="criterion-head" style="margin-bottom: var(--space-2)">
+          <div class="field grow">
+            <label>${esc(entry.name)}</label>
+            <div class="hint">${esc(entry.description)} · Suchhinweis: „${esc(entry.searchHint)}"</div>
+          </div>
+          <button class="btn btn-small" data-add-catalog="${idx}">+ Übernehmen</button>
+        </div>`).join('')}
+    </div>` : '';
 
   body.innerHTML = `
     ${resumeBlock}
@@ -139,7 +163,11 @@ function drawStep1(body) {
         ? `<div class="notice notice-warn">Noch ${open.length} von ${profile.criteria.length} Kriterien unbestätigt.</div>`
         : '<div class="notice notice-ok" style="background:#e7f3ec;border:1px solid #bcd9c8;border-radius:var(--radius);padding:var(--space-2) var(--space-3)">Alle Kriterien bestätigt.</div>'}
     </div>
-    ${rows}
+    <h2>Online recherchierbar — Pre-Screening (${pre.length})</h2>
+    ${pre.length > 0 ? pre.map(criterionRow).join('') : '<p class="muted">Noch keine Pre-Screening-Kriterien — übernehmen Sie Vorschläge aus dem Katalog oder stellen Sie unten die Phase um.</p>'}
+    ${catalogBlock}
+    <h2>Nicht online recherchierbar — Qualifizierung, 2. Screening (${qual.length})</h2>
+    ${qual.length > 0 ? qual.map(criterionRow).join('') : '<p class="muted">Keine Qualifizierungskriterien.</p>'}
     <div class="card">
       <h2>Suchparameter</h2>
       <div class="inline-fields">
@@ -187,6 +215,19 @@ function drawStep1(body) {
     el.addEventListener('click', () => {
       confirmed.add(el.dataset.confirm);
       readParams(body);
+      draw();
+    });
+  });
+  body.querySelectorAll('[data-add-catalog]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const entry = criterionCatalog[Number(el.dataset.addCatalog)];
+      if (!entry) return;
+      const c = criterionFromCatalog(entry);
+      profile.criteria.push(c);
+      confirmed.add(c.id);                     // Übernahme ist eine aktive Entscheidung
+      readParams(body);
+      store.saveProfile(profile);
+      toast(`Kriterium „${c.name}" übernommen.`);
       draw();
     });
   });

@@ -31,6 +31,14 @@ Request-Aufbau, Antwort-Parsing und Netzwerkschicht maßgeblich.
   Phasenwechsel erhalten. Max. 200 Zeichen, getrimmt.
 - Danach Suchparameter: Region (Default „DACH"), Anzahl 5–50 (Default 20), globale
   Hinweise — Vorbelegung wie bisheriger Screening-Lauf.
+- **Gruppierung (FR-015)**: erst Pre-Screening-Kriterien, dann Katalog-Vorschläge,
+  dann Qualifizierungskriterien; Phasenwechsel verschiebt zwischen den Gruppen.
+- **Kriterien-Katalog (FR-014)**: `criterionCatalog` in `docs/js/templates.js` (reine
+  Daten, alle Einträge `stage: prescreening` mit Suchhinweis); Übernahme per
+  `criterionFromCatalog(entry)` (pure, `core/model.js`) — neue IDs, sofort
+  `store.saveProfile`, Eintrag gilt als bestätigt. Testverankert: jeder Katalog-Eintrag
+  ergibt ein valides Kriterium (`validateProfile` ohne Fehler), Katalog-Namen sind
+  eindeutig; bereits vorhandene Namen (case-insensitiv) werden nicht angeboten.
 
 ## W3: Schritt 2 — Lauf & Übernahme
 

@@ -23,6 +23,14 @@
 - Q: Warteschlange von Schritt 3 beim Wiedereinstieg ohne frischen Lauf? → A:
   Gespeicherte Screening-Leads mit offenen Qualifizierungskriterien.
 
+### Session 2026-08-11
+
+- Q: Soll das Tool Pre-Screening-Kriterien aktiv vorschlagen? → A: Ja — Schritt 1
+  bietet einen Katalog aller online recherchierbaren Kriterienarten zum Übernehmen
+  per Klick an (Daten, kein Code). Schritt 1 zeigt zuerst die recherchierbaren
+  Kriterien samt Katalog-Vorschlägen, danach die nicht recherchierbaren
+  (Qualifizierungs-)Kriterien.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Schritt 1: Pre-Screening-Kriterien aktiv festlegen (Priority: P1)
@@ -196,6 +204,15 @@ Zusammenfassung mit der Rangliste abgleichen.
 - **FR-013**: Erfasste Suchhinweise je Kriterium MÜSSEN bei der Recherche als Hinweise
   übertragen werden; die Verfassungsgrenze bleibt unverändert — niemals Gewichte,
   Punktregeln, Stufen, Leads oder Bewertungen.
+- **FR-014**: Schritt 1 MUSS einen Katalog typischer, online recherchierbarer Kriterien
+  anbieten (mitgelieferte Daten, kein Sondercode — Verfassung I), aus dem Kriterien per
+  Klick ins Profil übernommen werden — mit Phase Pre-Screening, Suchhinweis und frei
+  anpassbaren Punktregeln/Gewichten. Kriterien, deren Name im Profil bereits existiert,
+  werden nicht erneut angeboten.
+- **FR-015**: Schritt 1 MUSS die Kriterien gruppiert anzeigen: zuerst die
+  Pre-Screening-Kriterien (online recherchierbar, inkl. Katalog-Vorschläge), danach die
+  Qualifizierungskriterien (nicht online recherchierbar); ein Phasenwechsel verschiebt
+  das Kriterium in die andere Gruppe.
 
 ### Key Entities
 

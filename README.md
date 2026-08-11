@@ -18,9 +18,13 @@ Alle Daten bleiben lokal im Browser; es gibt kein Konto und keine Telemetrie.
   (z. B. „bevorzugt 50–250 Mitarbeiter"), der die Online-Recherche lenkt
 - **Geführter Screening-Workflow**: Der Nav-Punkt „Screening" führt in drei Schritten
   durch den Prozess — (1) Phasen-Zuordnung aller Kriterien mit Pflicht-Bestätigung und
-  Suchhinweisen, (2) Online-Screening mit Prüfung und Übernahme der Kandidaten,
-  (3) geführte Qualifizierung Lead für Lead mit Live-Bewertung und Abschluss-Übersicht;
-  offene Screening-Leads werden beim Wiedereinstieg direkt zur Qualifizierung angeboten
+  Suchhinweisen, gruppiert nach „online recherchierbar" und „Qualifizierung", inklusive
+  eines **Kriterien-Katalogs** mit acht typischen recherchierbaren Kriterienarten zum
+  Übernehmen per Klick (Branche, Mitarbeiterzahl, Region, Umsatzklasse, Firmenalter,
+  Wachstumssignale, Digitalisierungs-Reife, Online-Sichtbarkeit), (2) Online-Screening
+  mit Prüfung und Übernahme der Kandidaten, (3) geführte Qualifizierung Lead für Lead
+  mit Live-Bewertung und Abschluss-Übersicht; offene Screening-Leads werden beim
+  Wiedereinstieg direkt zur Qualifizierung angeboten
 - **Online-Screening** *(optional, Schritt 2)*: Mit eigenem Anthropic-API-Schlüssel
   recherchiert das Tool per KI-Websuche Unternehmen, die zu den Pre-Screening-Kriterien
   passen (Region und Anzahl wählbar), inkl. Quellen-URLs je Angabe. Der Schlüssel bleibt

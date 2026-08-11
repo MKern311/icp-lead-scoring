@@ -70,7 +70,16 @@ Qualifizierungsfelder editierbar, Zusammenfassung, Wiedereinstieg.
 - [X] T219 [P] Regressionslauf `node --test tests/*.test.js` (SC-006) + Syntax-Check aller geänderten Module + Smoke-Check der ausgelieferten Dateien
 - [X] T220 [P] README.md + CLAUDE.md aktualisieren (Workflow ersetzt Screening-Ansicht, Suchhinweise, Cache v3)
 - [ ] T221 Manuelle Validierung: Quickstart V1–V5 im Browser (V4 mit echtem API-Schlüssel) — **Nutzer-Task**
-- [ ] T222 Commit auf `main`
+- [X] T222 Commit auf `main` (91f57de)
+
+## Phase 7: Erweiterung — Kriterien-Katalog & Gruppierung (FR-014/FR-015, Session 2026-08-11)
+
+- [X] T223 [P] Tests NEU `tests/catalog.test.js`: jeder Katalog-Eintrag ⇒ `criterionFromCatalog` ⇒ valides Kriterium (`validateProfile` fehlerfrei), `stage === 'prescreening'`, Suchhinweis nicht leer, Options-IDs neu; Katalog-Namen eindeutig; Katalog-Profil serialisiert vollständig als Pre-Screening
+- [X] T224 `docs/js/core/model.js`: pure `criterionFromCatalog(entry)` (neue IDs, Phase prescreening, Regeln kopiert) — Tests aus T223 grün
+- [X] T225 [P] `docs/js/templates.js`: `criterionCatalog` (8 online recherchierbare Kriterienarten als Daten: Branche, Mitarbeiterzahl, Region, Umsatzklasse, Firmenalter, Wachstumssignale, Digitalisierungs-/KI-Reife, Online-Sichtbarkeit)
+- [X] T226 `docs/js/ui/workflow.js`: Schritt 1 gruppiert — erst Pre-Screening-Kriterien, dann Katalog-Vorschläge (Übernahme per Klick, Duplikat-Namen ausgeblendet), dann Qualifizierungskriterien; Phasenwechsel verschiebt zwischen Gruppen
+- [X] T227 [P] `docs/sw.js` Cache `icp-cache-v4`; README.md + CLAUDE.md um Katalog ergänzen
+- [X] T228 Regressionslauf + Syntax-/Smoke-Check + Commit auf `main`
 
 ## Dependencies
 
