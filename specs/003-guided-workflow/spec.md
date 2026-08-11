@@ -30,6 +30,13 @@
   per Klick an (Daten, kein Code). Schritt 1 zeigt zuerst die recherchierbaren
   Kriterien samt Katalog-Vorschlägen, danach die nicht recherchierbaren
   (Qualifizierungs-)Kriterien.
+- Q: Suchpräferenzen als Freitext? → A: Nein — bei Auswahl-Kriterien wird die
+  Suchpräferenz als Mehrfachauswahl aus den vorhandenen Ausprägungen angeklickt
+  (keine Freitexteingabe); Freitext-Suchhinweise bleiben nur für
+  Zahlenbereichs-Kriterien. Kategorisierbare Katalog-Kriterien (Branche,
+  Unternehmensgröße, Standort, Umsatzklasse, Firmenalter) sind vorgegebene
+  Auswahlfelder mit festen Klassen; Wachstumssignale werden konkret getrennt in
+  „Presse/News" und „Stellenanzeigen".
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -213,6 +220,15 @@ Zusammenfassung mit der Rangliste abgleichen.
   Pre-Screening-Kriterien (online recherchierbar, inkl. Katalog-Vorschläge), danach die
   Qualifizierungskriterien (nicht online recherchierbar); ein Phasenwechsel verschiebt
   das Kriterium in die andere Gruppe.
+- **FR-016**: Bei Auswahl-Kriterien der Pre-Screening-Phase MUSS die Suchpräferenz als
+  Mehrfachauswahl aus den Ausprägungen des Kriteriums wählbar sein (keine
+  Freitexteingabe); die gewählten Ausprägungen werden bei der Recherche als bevorzugte
+  Kategorien übertragen. Freitext-Suchhinweise bleiben nur bei
+  Zahlenbereichs-Kriterien. Punktwerte und Gewichte bleiben weiterhin lokal.
+- **FR-017**: Der Katalog MUSS kategorisierbare Kriterien als vorgegebene Auswahlfelder
+  mit festen Klassen liefern (Branche, Unternehmensgröße als Mitarbeiter-Klassen,
+  Standort, Umsatzklasse, Firmenalter als Altersklassen) und Wachstumssignale als
+  getrennte, konkrete Kriterien anbieten (Presse/News-Signale und Stellenanzeigen).
 
 ### Key Entities
 

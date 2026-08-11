@@ -6,9 +6,10 @@ stage-Erweiterung in `specs/002-online-screening/`.
 
 ## Kriterium (erweitert)
 
-| Feld         | Typ    | Regeln                                                            |
-|--------------|--------|-------------------------------------------------------------------|
-| `searchHint` | string | optional, getrimmt, max. 200 Zeichen, Default `''`; frei wählbarer Freitext, der beschreibt, wonach online gesucht werden soll (z. B. „bevorzugt 50–250 Mitarbeiter") |
+| Feld            | Typ      | Regeln                                                            |
+|-----------------|----------|-------------------------------------------------------------------|
+| `searchHint`    | string   | optional, getrimmt, max. 200 Zeichen, Default `''`; Freitext nur noch für Zahlenbereichs-Kriterien (FR-016) |
+| `searchTargets` | string[] | Default `[]`; nur bei Auswahl-Kriterien wirksam: IDs der bevorzugten Ausprägungen (Mehrfachauswahl per Klick). Export als Options-Labels, Import bildet Labels auf neue IDs ab (unbekanntes Label ⇒ Fehler); gelöschte Optionen werden entfernt |
 
 - Persistenz: Teil des Profils (localStorage über `store.js`), wie alle Kriterienfelder.
 - Export/Import: `schemaVersion` bleibt 2; `searchHint` optional im Export enthalten,

@@ -81,6 +81,18 @@ Qualifizierungsfelder editierbar, Zusammenfassung, Wiedereinstieg.
 - [X] T227 [P] `docs/sw.js` Cache `icp-cache-v4`; README.md + CLAUDE.md um Katalog ergänzen
 - [X] T228 Regressionslauf + Syntax-/Smoke-Check + Commit auf `main`
 
+## Phase 8: Erweiterung — Suchpräferenz per Auswahl statt Freitext (FR-016/FR-017, Session 2026-08-11)
+
+- [X] T229 [P] Tests erweitern (model/screening/profile-io/catalog): `searchTargets` Default `[]` + Validierung (Array aus Options-IDs bei select), Request-Zeile „Bevorzugt: <Labels>" nur bei Pre-Screening-select mit Auswahl, Export/Import über Options-Labels (unbekanntes Label ⇒ Fehler), Katalog: kategorisierbare Einträge sind selects mit festen Klassen, Wachstumssignale getrennt (Presse/News, Stellenanzeigen)
+- [X] T230 `docs/js/core/model.js`: `searchTargets: []` in `createCriterion`, Validierung, `migrateProfile`-Ergänzung
+- [X] T231 `docs/js/core/screening.js`: `buildScreeningRequest` serialisiert „Bevorzugt: <Labels>" aus `searchTargets` (nur select, nur nicht-leer)
+- [X] T232 `docs/js/core/profile-io.js` + `profile-export.schema.json`: `searchTargets` als Label-Array exportieren/importieren
+- [X] T233 `docs/js/templates.js`: Katalog umbauen — Unternehmensgröße und Firmenalter als Auswahlfelder (Klassen), Wachstumssignale getrennt in „Presse/News" und „Stellenanzeigen" (9 Einträge); selects ohne Freitext-Hint
+- [X] T234 `docs/js/ui/workflow.js` Schritt 1: Mehrfachauswahl-Picker („Bevorzugt suchen nach") je Pre-Screening-select statt Freitextfeld; Freitext-Hint nur noch bei range
+- [X] T235 `docs/js/ui/profile-editor.js`: Paritäts-Picker für Pre-Screening-selects; Hint-Feld nur noch für Nicht-selects
+- [X] T236 [P] `docs/sw.js` Cache `icp-cache-v5`; Contracts (workflow.md W2, screening.md 1a), data-model.md, README/CLAUDE.md aktualisieren
+- [X] T237 Regressionslauf + Smoke + Commit auf `main`
+
 ## Dependencies
 
 - Phase 2 vor allem anderen: T201→T204, T202→T205, T203→T206; T207 parallel dazu

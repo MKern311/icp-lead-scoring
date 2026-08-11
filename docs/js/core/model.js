@@ -24,7 +24,7 @@ export function createProfile(name = '') {
 }
 
 export function createCriterion(type) {
-  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false, stage: 'qualification', searchHint: '' };
+  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false, stage: 'qualification', searchHint: '', searchTargets: [] };
   switch (type) {
     case 'select':
       base.rules = {
@@ -82,6 +82,7 @@ export function migrateProfile(profile) {
     for (const c of profile.criteria) {
       if (!STAGES.includes(c.stage)) c.stage = 'qualification';
       if (typeof c.searchHint !== 'string') c.searchHint = '';
+      if (!Array.isArray(c.searchTargets)) c.searchTargets = [];
     }
   }
   return profile;
@@ -123,6 +124,13 @@ function validateCriterion(c, idx, errors) {
   if (!STAGES.includes(c.stage)) errors.push({ field, message: `${label}: ungültige Screening-Phase.` });
   if (c.searchHint !== undefined && (typeof c.searchHint !== 'string' || c.searchHint.length > 200)) {
     errors.push({ field, message: `${label}: Suchhinweis muss Text mit max. 200 Zeichen sein.` });
+  }
+  if (c.searchTargets !== undefined) {
+    const optionIds = c.type === 'select' ? new Set((c.rules?.options || []).map((o) => o.id)) : null;
+    if (!Array.isArray(c.searchTargets) || c.searchTargets.some((t) => typeof t !== 'string')
+      || (optionIds && c.searchTargets.some((t) => !optionIds.has(t)))) {
+      errors.push({ field, message: `${label}: ungültige Suchauswahl (nur vorhandene Ausprägungen).` });
+    }
   }
   if (!inRange(c.weight, 0, 100)) errors.push({ field, message: `${label}: Gewichtung muss zwischen 0 und 100 liegen.` });
 

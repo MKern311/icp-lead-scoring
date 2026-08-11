@@ -47,6 +47,7 @@
         "knockout": { "type": "boolean" },
         "stage": { "enum": ["prescreening", "qualification"] },
         "searchHint": { "type": "string", "maxLength": 200 },
+        "searchTargets": { "type": "array", "items": { "type": "string" } },
         "rules": {
           "oneOf": [
             {

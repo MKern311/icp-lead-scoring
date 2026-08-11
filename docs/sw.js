@@ -1,7 +1,7 @@
 // Service Worker: cache-first mit versioniertem Cache — offline nach erstem Laden
 // (Constitution III). Bei neuer Version Cache-Namen hochzählen.
 
-const CACHE = 'icp-cache-v4';
+const CACHE = 'icp-cache-v5';
 
 const ASSETS = [
   './',

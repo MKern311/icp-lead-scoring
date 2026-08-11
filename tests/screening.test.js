@@ -113,6 +113,24 @@ test('Suchhinweise: leerer oder nur-Whitespace-Hint erzeugt keine Hinweis-Zeile'
   assert.ok(!s.includes('Suchhinweis:'));
 });
 
+test('searchTargets: gewählte Ausprägungen als „Bevorzugt"-Zeile, nur Pre-Screening, keine Punkte (FR-016)', () => {
+  const f = fixture();
+  f.branche.searchTargets = ['saas', 'handel'];
+  f.budget.searchTargets = ['x'];                 // Qualifizierung — darf nie serialisiert werden
+  const s = JSON.stringify(buildScreeningRequest(f.p, {}));
+  assert.ok(s.includes('Bevorzugt: SaaS, Handel'));
+  assert.ok(!s.includes('weight') && !s.includes('points'));
+  assert.ok(!s.includes('Budget vorhanden'));
+});
+
+test('searchTargets: leer oder Nicht-select erzeugt keine „Bevorzugt"-Zeile', () => {
+  const f = fixture();
+  f.branche.searchTargets = [];
+  f.mitarbeiter.searchTargets = ['irrelevant-bei-range'];
+  const s = JSON.stringify(buildScreeningRequest(f.p, {}));
+  assert.ok(!s.includes('Bevorzugt:'));
+});
+
 test('qualificationQueue: nur Screening-Leads mit offenen Qualifizierungskriterien, Bestandsreihenfolge', () => {
   const f = fixture();
   const open = { id: 'l1', profileId: f.p.id, name: 'Offen', values: {}, source: 'screening' };

@@ -27,8 +27,12 @@ Request-Aufbau, Antwort-Parsing und Netzwerkschicht maßgeblich.
   dieser Workflow-Sitzung aktiv gesetzt oder explizit bestätigt hat.
 - Phasen-Änderungen und Suchhinweise werden sofort im Profil gespeichert
   (`store.saveProfile`) — identische Daten wie im Profil-Editor.
-- Suchhinweis-Eingabe erscheint nur bei Pre-Screening-Kriterien; Wert bleibt bei
-  Phasenwechsel erhalten. Max. 200 Zeichen, getrimmt.
+- Suchpräferenz (FR-016): Bei Pre-Screening-Kriterien vom Typ Auswahlliste wird die
+  Präferenz als Mehrfachauswahl der Ausprägungen angeklickt (`searchTargets`,
+  Options-IDs) — kein Freitext. Freitext-`searchHint` (max. 200 Zeichen, getrimmt)
+  erscheint nur noch bei Zahlenbereichs-Kriterien; Ja/Nein- und Skalen-Kriterien
+  brauchen keine Präferenz-Eingabe. Werte bleiben bei Phasenwechsel erhalten;
+  gelöschte Optionen werden aus `searchTargets` entfernt.
 - Danach Suchparameter: Region (Default „DACH"), Anzahl 5–50 (Default 20), globale
   Hinweise — Vorbelegung wie bisheriger Screening-Lauf.
 - **Gruppierung (FR-015)**: erst Pre-Screening-Kriterien, dann Katalog-Vorschläge,

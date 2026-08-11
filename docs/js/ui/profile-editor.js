@@ -111,6 +111,18 @@ function draw(messages = null) {
     el.addEventListener('change', () => handleBind(el));
     if (el.type === 'number') el.addEventListener('input', () => handleBind(el, true));
   });
+  // Suchpräferenz-Picker (FR-016): Mehrfachauswahl aus den Ausprägungen
+  container.querySelectorAll('[data-target]').forEach((el) => {
+    el.addEventListener('change', () => {
+      const [cid, oid] = el.dataset.target.split(':');
+      const c = working.criteria.find((x) => x.id === cid);
+      if (!c) return;
+      const chosen = new Set(c.searchTargets || []);
+      if (el.checked) chosen.add(oid);
+      else chosen.delete(oid);
+      c.searchTargets = c.rules.options.map((o) => o.id).filter((id) => chosen.has(id));
+    });
+  });
 }
 
 function criterionCard(c, index) {
@@ -137,7 +149,13 @@ function criterionCard(c, index) {
       ${c.knockout ? '<div class="hint">K.o.: Erreicht ein Lead hier weniger als 1 Punkt, ist er disqualifiziert — unabhängig von der Gesamtpunktzahl.</div>' : ''}
       <div class="field"><label>Beschreibung</label>
         <input type="text" maxlength="500" data-bind="c:${c.id}:description" value="${esc(c.description || '')}" placeholder="Optional: Was wird hier bewertet?"></div>
-      ${c.stage === 'prescreening' ? `
+      ${c.stage === 'prescreening' && c.type === 'select' ? `
+      <div class="field"><label>Bevorzugt suchen nach (Mehrfachauswahl)</label>
+        <div class="target-picker">
+          ${c.rules.options.map((o) => `<label><input type="checkbox" data-target="${c.id}:${o.id}" ${(c.searchTargets || []).includes(o.id) ? 'checked' : ''}> ${esc(o.label)}</label>`).join('')}
+        </div>
+        <div class="hint">Übertragen werden nur die angeklickten Ausprägungen als Präferenz — niemals Gewichte oder Punktwerte.</div></div>` : ''}
+      ${c.stage === 'prescreening' && c.type !== 'select' ? `
       <div class="field"><label>Suchhinweis für das Online-Screening (optional)</label>
         <input type="text" maxlength="200" data-bind="c:${c.id}:searchHint" value="${esc(c.searchHint || '')}" placeholder="z. B. bevorzugt 50–250 Mitarbeiter">
         <div class="hint">Wird bei der Recherche mit übertragen — niemals Gewichte oder Punktwerte.</div></div>` : ''}
@@ -280,7 +298,12 @@ async function handleAction(dataset) {
       draw();
       return;
     case 'remove-option':
-      if (criterion) criterion.rules.options = criterion.rules.options.filter((o) => o.id !== dataset.oid);
+      if (criterion) {
+        criterion.rules.options = criterion.rules.options.filter((o) => o.id !== dataset.oid);
+        if (Array.isArray(criterion.searchTargets)) {
+          criterion.searchTargets = criterion.searchTargets.filter((id) => id !== dataset.oid);
+        }
+      }
       draw();
       return;
     case 'add-range': {

@@ -2,22 +2,24 @@
 // Vorlagen nutzen exakt dieselben Mechanismen wie Nutzerprofile, kein Sondercode).
 // Instanziierung läuft über profile-io.importProfile (neue IDs, volle Validierung).
 
-// Katalog online recherchierbarer Kriterien (Feature 003, FR-014) — reine Daten.
-// Schritt 1 des Workflows bietet sie zum Übernehmen an; Gewichte und Punktregeln
-// sind Startwerte und im Profil-Editor frei anpassbar (Verfassung I).
+// Katalog online recherchierbarer Kriterien (Feature 003, FR-014/FR-017) — reine Daten.
+// Schritt 1 des Workflows bietet sie zum Übernehmen an; Gewichte und Punktregeln sind
+// Startwerte und im Profil-Editor frei anpassbar (Verfassung I). Kategorisierbare
+// Kriterien sind Auswahlfelder mit festen Klassen — die Suchpräferenz wird per
+// Mehrfachauswahl aus den Klassen angeklickt (FR-016), nicht als Freitext erfasst.
 export const criterionCatalog = [
   {
     name: 'Branche',
     description: 'Über Website, Verzeichnisse und Presse belegbar.',
     type: 'select',
     weight: 15,
-    searchHint: 'Bevorzugte Branchen eintragen, z. B. IT/Software und Industrie',
     rules: {
       options: [
         { label: 'IT / Software', points: 100 },
         { label: 'Industrie / Fertigung', points: 80 },
         { label: 'Handel / E-Commerce', points: 60 },
-        { label: 'Dienstleistung', points: 60 },
+        { label: 'Dienstleistung / Beratung', points: 60 },
+        { label: 'Gesundheitswesen', points: 50 },
         { label: 'Öffentlicher Sektor', points: 40 },
         { label: 'Sonstige', points: 20 },
       ],
@@ -25,25 +27,24 @@ export const criterionCatalog = [
   },
   {
     name: 'Unternehmensgröße (Mitarbeiter)',
-    description: 'Registerdaten, Karriereseiten, Jobportale, LinkedIn-Unternehmensseite.',
-    type: 'range',
+    description: 'Größenklasse aus Registerdaten, Karriereseiten, Jobportalen, LinkedIn.',
+    type: 'select',
     weight: 15,
-    searchHint: 'z. B. bevorzugt 50–250 Mitarbeiter',
     rules: {
-      ranges: [
-        { min: 1, max: 9, points: 30 },
-        { min: 10, max: 49, points: 70 },
-        { min: 50, max: 249, points: 100 },
-        { min: 250, max: 5000, points: 60 },
+      options: [
+        { label: '1–9 Mitarbeiter', points: 30 },
+        { label: '10–49 Mitarbeiter', points: 70 },
+        { label: '50–249 Mitarbeiter', points: 100 },
+        { label: '250–999 Mitarbeiter', points: 60 },
+        { label: '1000+ Mitarbeiter', points: 40 },
       ],
     },
   },
   {
     name: 'Region / Standort',
-    description: 'Impressum und Standortangaben der Website.',
+    description: 'Hauptsitz laut Impressum und Standortangaben.',
     type: 'select',
     weight: 10,
-    searchHint: 'z. B. bevorzugt Süddeutschland',
     rules: {
       options: [
         { label: 'Deutschland', points: 100 },
@@ -58,7 +59,6 @@ export const criterionCatalog = [
     description: 'Öffentliche Registerdaten (z. B. Northdata) — oft nur grob belegbar.',
     type: 'select',
     weight: 10,
-    searchHint: 'z. B. bevorzugt 10–50 Mio. € Jahresumsatz',
     rules: {
       options: [
         { label: 'unter 1 Mio. €', points: 20 },
@@ -69,25 +69,32 @@ export const criterionCatalog = [
     },
   },
   {
-    name: 'Firmenalter (Jahre)',
-    description: 'Gründungsjahr aus Register, Website oder Presse.',
-    type: 'range',
+    name: 'Firmenalter',
+    description: 'Altersklasse laut Gründungsjahr aus Register, Website oder Presse.',
+    type: 'select',
     weight: 5,
-    searchHint: 'z. B. bevorzugt etablierte Unternehmen ab 10 Jahren',
     rules: {
-      ranges: [
-        { min: 0, max: 4, points: 30 },
-        { min: 5, max: 14, points: 70 },
-        { min: 15, max: 200, points: 100 },
+      options: [
+        { label: 'unter 5 Jahre', points: 30 },
+        { label: '5–14 Jahre', points: 70 },
+        { label: '15 Jahre und älter', points: 100 },
       ],
     },
   },
   {
-    name: 'Wachstumssignale',
-    description: 'Presse-News, Stellenanzeigen, Expansionsmeldungen der letzten 12 Monate.',
+    name: 'Wachstumssignal: Presse/News',
+    description: 'Expansions-, Investitions- oder Wachstumsmeldungen der letzten 12 Monate.',
     type: 'boolean',
-    weight: 15,
-    searchHint: 'Stellenanzeigen und News der letzten 12 Monate prüfen',
+    weight: 10,
+    searchHint: 'Pressemitteilungen sowie Wirtschafts- und Regionalmedien der letzten 12 Monate prüfen',
+    rules: { pointsYes: 100, pointsNo: 30 },
+  },
+  {
+    name: 'Wachstumssignal: Stellenanzeigen',
+    description: 'Aktive Stellenausschreibungen auf Jobportalen oder der Karriereseite.',
+    type: 'boolean',
+    weight: 10,
+    searchHint: 'Jobportale und Karriereseite auf aktuell offene Stellen prüfen',
     rules: { pointsYes: 100, pointsNo: 30 },
   },
   {
@@ -103,7 +110,7 @@ export const criterionCatalog = [
     description: 'Website-Qualität und öffentlich gepflegte Social-Media-Unternehmensseiten.',
     type: 'scale',
     weight: 10,
-    searchHint: 'Website und öffentliche Social-Media-Präsenz (LinkedIn, Instagram, YouTube)',
+    searchHint: 'Website und öffentliche Social-Media-Präsenz prüfen (LinkedIn, Instagram, YouTube)',
     rules: { min: 1, max: 5 },
   },
 ];

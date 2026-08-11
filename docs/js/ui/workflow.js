@@ -102,12 +102,26 @@ function drawStep1(body) {
 
   const criterionRow = (c) => {
     const isConfirmed = confirmed.has(c.id);
-    const hintField = c.stage === 'prescreening' ? `
+    // Suchpräferenz (FR-016): Auswahl-Kriterien per Klick aus den Ausprägungen,
+    // Freitext nur noch bei Zahlenbereichen; Signale/Skalen brauchen keine Präferenz.
+    let hintField = '';
+    if (c.stage === 'prescreening' && c.type === 'select') {
+      hintField = `
+      <div class="field grow">
+        <label>Bevorzugt suchen nach (Mehrfachauswahl)</label>
+        <div class="target-picker">
+          ${c.rules.options.map((o) => `<label><input type="checkbox" data-target="${c.id}:${o.id}" ${(c.searchTargets || []).includes(o.id) ? 'checked' : ''}> ${esc(o.label)}</label>`).join('')}
+        </div>
+        <div class="hint">Ohne Auswahl wird ohne Präferenz gesucht; bewertet werden immer alle Ausprägungen.</div>
+      </div>`;
+    } else if (c.stage === 'prescreening' && c.type === 'range') {
+      hintField = `
       <div class="field grow">
         <label>Suchhinweis (optional)</label>
         <input type="text" maxlength="200" data-hint="${c.id}" value="${esc(c.searchHint || '')}"
           placeholder="Wonach soll gesucht werden? z. B. bevorzugt 50–250 Mitarbeiter">
-      </div>` : '';
+      </div>`;
+    }
     return `
       <div class="card criterion-card ${isConfirmed ? '' : 'unconfirmed'}">
         <div class="criterion-head">
@@ -144,7 +158,9 @@ function drawStep1(body) {
         <div class="criterion-head" style="margin-bottom: var(--space-2)">
           <div class="field grow">
             <label>${esc(entry.name)}</label>
-            <div class="hint">${esc(entry.description)} · Suchhinweis: „${esc(entry.searchHint)}"</div>
+            <div class="hint">${esc(entry.description)}${entry.type === 'select'
+              ? ` · Klassen: ${entry.rules.options.map((o) => esc(o.label)).join(', ')}`
+              : entry.searchHint ? ` · ${esc(entry.searchHint)}` : ''}</div>
           </div>
           <button class="btn btn-small" data-add-catalog="${idx}">+ Übernehmen</button>
         </div>`).join('')}
@@ -208,6 +224,18 @@ function drawStep1(body) {
       const c = profile.criteria.find((x) => x.id === el.dataset.hint);
       if (!c) return;
       c.searchHint = el.value.slice(0, 200);
+      store.saveProfile(profile);
+    });
+  });
+  body.querySelectorAll('[data-target]').forEach((el) => {
+    el.addEventListener('change', () => {
+      const [cid, oid] = el.dataset.target.split(':');
+      const c = profile.criteria.find((x) => x.id === cid);
+      if (!c) return;
+      const chosen = new Set(c.searchTargets || []);
+      if (el.checked) chosen.add(oid);
+      else chosen.delete(oid);
+      c.searchTargets = c.rules.options.map((o) => o.id).filter((id) => chosen.has(id));
       store.saveProfile(profile);
     });
   });

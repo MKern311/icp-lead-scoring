@@ -128,6 +128,27 @@ test('searchHint überlebt den Roundtrip; leere Hints werden nicht exportiert', 
   assert.equal(imported.criteria[1].searchHint, '');
 });
 
+test('searchTargets überleben den Roundtrip als Options-Labels', () => {
+  const original = sampleProfile();
+  original.criteria[0].stage = 'prescreening';
+  original.criteria[0].searchTargets = [original.criteria[0].rules.options[1].id]; // „Handel"
+  const out = exportProfile(original);
+  assert.deepEqual(out.profile.criteria[0].searchTargets, ['Handel']);
+  assert.equal('searchTargets' in out.profile.criteria[1], false);
+  const { profile: imported, errors } = importProfile(out);
+  assert.deepEqual(errors, []);
+  const handelId = imported.criteria[0].rules.options.find((o) => o.label === 'Handel').id;
+  assert.deepEqual(imported.criteria[0].searchTargets, [handelId]);
+});
+
+test('importProfile: unbekanntes searchTargets-Label wird abgelehnt', () => {
+  const out = exportProfile(sampleProfile());
+  out.profile.criteria[0].searchTargets = ['Maschinenbau'];
+  const { profile, errors } = importProfile(out);
+  assert.equal(profile, null);
+  assert.ok(errors.some((e) => e.includes('Suchauswahl')));
+});
+
 test('importProfile: fehlendes searchHint ⇒ leer, Nicht-String wird abgelehnt', () => {
   const out = exportProfile(sampleProfile());
   const { profile } = importProfile(out);

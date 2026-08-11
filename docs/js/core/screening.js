@@ -100,11 +100,16 @@ export function buildScreeningRequest(profile, { region = 'DACH', count = 20, hi
 
   const criteriaLines = criteria.map((c, i) => {
     const desc = c.description ? ` — ${c.description}` : '';
-    // Suchhinweis (Feature 003): frei formulierter Suchparameter je Kriterium —
-    // nur Pre-Screening-Kriterien erreichen diese Stelle (Filter oben, SC-004).
+    // Suchparameter je Kriterium (Feature 003) — nur Pre-Screening-Kriterien erreichen
+    // diese Stelle (Filter oben, SC-004). searchTargets: vom Nutzer angeklickte
+    // bevorzugte Ausprägungen (FR-016); searchHint: Freitext (v. a. Zahlenbereiche).
+    const targetLabels = c.type === 'select' && Array.isArray(c.searchTargets) && c.searchTargets.length > 0
+      ? c.rules.options.filter((o) => c.searchTargets.includes(o.id)).map((o) => o.label)
+      : [];
+    const targets = targetLabels.length > 0 ? `\n   Bevorzugt: ${targetLabels.join(', ')}` : '';
     const hint = typeof c.searchHint === 'string' && c.searchHint.trim()
       ? `\n   Suchhinweis: ${c.searchHint.trim()}` : '';
-    return `${key(i)}: ${c.name}${desc}\n   Erwarteter Wert: ${valueDescription(c)}${hint}`;
+    return `${key(i)}: ${c.name}${desc}\n   Erwarteter Wert: ${valueDescription(c)}${targets}${hint}`;
   }).join('\n');
 
   const userText = `Finde ${n} Unternehmen in der Region ${region}, die zu folgendem Suchprofil passen.

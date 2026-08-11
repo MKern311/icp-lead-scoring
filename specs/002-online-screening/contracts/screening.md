@@ -22,11 +22,14 @@ prescreeningCriteria(profile) → Criterion[]                              // st
    Lead-Daten).
    *Begründung Gewichte/Punkte: die Recherche braucht nur Ausprägungen; Punktregeln sind
    Geschäftslogik und bleiben lokal (Constitution II).*
-1a. **Suchhinweise (Feature 003)**: Hat ein Pre-Screening-Kriterium einen nicht-leeren
-   `searchHint`, wird an seine Kriterienzeile `Suchhinweis: <text>` angehängt.
-   Suchhinweise von Qualifizierungskriterien erscheinen **nie** im Request
-   (testverankert, erweiterter SC-004-Anker). Suchhinweise sind Suchparameter im Sinne
-   von Constitution III (c) und enthalten strukturell keine Gewichte/Punkte — der
+1a. **Suchhinweise & Suchauswahl (Feature 003)**: Hat ein Pre-Screening-Kriterium einen
+   nicht-leeren `searchHint`, wird an seine Kriterienzeile `Suchhinweis: <text>`
+   angehängt. Hat ein Pre-Screening-Auswahlkriterium eine nicht-leere Suchauswahl
+   (`searchTargets`, FR-016), wird `Bevorzugt: <Label1>, <Label2>, …` angehängt —
+   ausschließlich Options-Labels, die ohnehin als enum im Schema stehen.
+   Suchparameter von Qualifizierungskriterien erscheinen **nie** im Request
+   (testverankert, erweiterter SC-004-Anker). Beides sind Suchparameter im Sinne von
+   Constitution III (c) und enthalten strukturell keine Gewichte/Punkte — der
    Request-Builder liest diese Felder nicht.
 2. Request-Gestalt:
    - `model: "claude-opus-5"`, `max_tokens: 16000`

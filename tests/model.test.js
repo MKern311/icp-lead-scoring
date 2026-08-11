@@ -143,8 +143,26 @@ test('migrateProfile: ergänzt fehlende Phase mit „qualification", idempotent,
   assert.equal(p.criteria[1].stage, 'prescreening');
 });
 
-test('createCriterion: searchHint startet leer', () => {
+test('createCriterion: searchHint startet leer, searchTargets startet leer', () => {
   assert.equal(createCriterion('select').searchHint, '');
+  assert.deepEqual(createCriterion('select').searchTargets, []);
+});
+
+test('validateProfile: searchTargets — Options-IDs ok, fremde IDs oder Nicht-Array sind Fehler', () => {
+  const p = validProfile();
+  p.criteria[0].searchTargets = [p.criteria[0].rules.options[0].id];
+  assert.deepEqual(validateProfile(p).errors, []);
+  p.criteria[0].searchTargets = ['gibt-es-nicht'];
+  assert.ok(validateProfile(p).errors.some((e) => e.message.includes('Suchauswahl')));
+  p.criteria[0].searchTargets = 'keine-liste';
+  assert.ok(validateProfile(p).errors.some((e) => e.message.includes('Suchauswahl')));
+});
+
+test('migrateProfile: ergänzt fehlendes searchTargets als leere Liste', () => {
+  const p = validProfile();
+  delete p.criteria[0].searchTargets;
+  migrateProfile(p);
+  assert.deepEqual(p.criteria[0].searchTargets, []);
 });
 
 test('validateProfile: searchHint — Text bis 200 Zeichen ok, zu lang oder Nicht-String ist Fehler', () => {

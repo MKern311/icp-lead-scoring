@@ -23,8 +23,10 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Persistenz ausschließlich über `docs/js/store.js` (localStorage, Namespace `icp.v1.*`);
   Bewertungen werden nie gespeichert, immer via `evaluate(profile, lead)` berechnet
 - Screening: Kriterien haben `stage` (`prescreening` = online recherchierbar,
-  `qualification` = 2. Screening; Default qualification) und optional `searchHint`
-  (Freitext ≤ 200 Zeichen, nur für Pre-Screening serialisiert). `core/screening.js` ist
+  `qualification` = 2. Screening; Default qualification), `searchTargets` (bevorzugte
+  Options-IDs bei Auswahl-Kriterien, per Klick — serialisiert als „Bevorzugt:"-Labels)
+  und optional `searchHint` (Freitext ≤ 200 Zeichen, UI nur noch bei range; beides nur
+  für Pre-Screening serialisiert). `core/screening.js` ist
   pure und darf nur Pre-Screening-Kriterien serialisieren (testverankert, SC-004); die KI
   liefert nur Rohwerte + Quellen, nie Punkte. API-Schlüssel unter `icp.v1.apikey`, nie
   exportieren. Die Route `#/screening` rendert den geführten Workflow (`ui/workflow.js`,

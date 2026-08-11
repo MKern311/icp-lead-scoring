@@ -18,10 +18,13 @@ Alle Daten bleiben lokal im Browser; es gibt kein Konto und keine Telemetrie.
   (z. B. „bevorzugt 50–250 Mitarbeiter"), der die Online-Recherche lenkt
 - **Geführter Screening-Workflow**: Der Nav-Punkt „Screening" führt in drei Schritten
   durch den Prozess — (1) Phasen-Zuordnung aller Kriterien mit Pflicht-Bestätigung und
-  Suchhinweisen, gruppiert nach „online recherchierbar" und „Qualifizierung", inklusive
-  eines **Kriterien-Katalogs** mit acht typischen recherchierbaren Kriterienarten zum
-  Übernehmen per Klick (Branche, Mitarbeiterzahl, Region, Umsatzklasse, Firmenalter,
-  Wachstumssignale, Digitalisierungs-Reife, Online-Sichtbarkeit), (2) Online-Screening
+  Suchpräferenzen, gruppiert nach „online recherchierbar" und „Qualifizierung",
+  inklusive eines **Kriterien-Katalogs** mit neun recherchierbaren Kriterienarten zum
+  Übernehmen per Klick — kategorisierbare als vorgegebene Auswahlfelder (Branche,
+  Mitarbeiter-Klassen, Region, Umsatzklasse, Firmenalter) mit **anklickbarer
+  Suchpräferenz statt Freitext**, dazu getrennte Wachstumssignale (Presse/News,
+  Stellenanzeigen) sowie Digitalisierungs-Reife und Online-Sichtbarkeit,
+  (2) Online-Screening
   mit Prüfung und Übernahme der Kandidaten, (3) geführte Qualifizierung Lead für Lead
   mit Live-Bewertung und Abschluss-Übersicht; offene Screening-Leads werden beim
   Wiedereinstieg direkt zur Qualifizierung angeboten

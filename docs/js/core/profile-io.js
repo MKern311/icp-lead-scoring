@@ -20,8 +20,12 @@ export function exportProfile(profile, appVersion = '2') {
         weight: c.weight,
         knockout: !!c.knockout,
         stage: STAGES.includes(c.stage) ? c.stage : 'qualification',
-        // Suchhinweis nur schreiben, wenn gesetzt — leere Felder blähen Exporte nicht auf
+        // Suchparameter nur schreiben, wenn gesetzt — leere Felder blähen Exporte nicht auf.
+        // searchTargets als Options-Labels (Export kennt keine IDs).
         ...(typeof c.searchHint === 'string' && c.searchHint.trim() ? { searchHint: c.searchHint } : {}),
+        ...(c.type === 'select' && Array.isArray(c.searchTargets) && c.searchTargets.length > 0
+          ? { searchTargets: c.rules.options.filter((o) => c.searchTargets.includes(o.id)).map((o) => o.label) }
+          : {}),
         rules: exportRules(c),
       })),
       tiers: profile.tiers.map((t) => ({ label: t.label, minScore: t.minScore })),
@@ -77,6 +81,9 @@ export function importProfile(data) {
     if (c.searchHint !== undefined && (typeof c.searchHint !== 'string' || c.searchHint.length > 200)) {
       errors.push(`${label}: Suchhinweis muss Text mit max. 200 Zeichen sein.`);
     }
+    if (c.searchTargets !== undefined && (!Array.isArray(c.searchTargets) || c.searchTargets.some((t) => typeof t !== 'string'))) {
+      errors.push(`${label}: Suchauswahl muss eine Liste von Ausprägungs-Labels sein.`);
+    }
 
     const r = c.rules;
     let rules = null;
@@ -108,6 +115,15 @@ export function importProfile(data) {
       }
     }
     if (rules) {
+      // Suchauswahl: exportierte Labels auf die neu vergebenen Options-IDs abbilden (FR-016)
+      const searchTargets = [];
+      if (c.type === 'select' && Array.isArray(c.searchTargets)) {
+        for (const t of c.searchTargets) {
+          const opt = rules.options.find((o) => o.label.trim().toLowerCase() === String(t).trim().toLowerCase());
+          if (opt) searchTargets.push(opt.id);
+          else errors.push(`${label}: Suchauswahl „${t}" ist keine Ausprägung dieses Kriteriums.`);
+        }
+      }
       criteria.push({
         id: uuid(),
         name: c.name,
@@ -118,6 +134,7 @@ export function importProfile(data) {
         // v1-Exporte kennen keine Phase — sichere Voreinstellung (FR-002)
         stage: STAGES.includes(c.stage) ? c.stage : 'qualification',
         searchHint: typeof c.searchHint === 'string' ? c.searchHint : '',
+        searchTargets,
         rules,
       });
     }
