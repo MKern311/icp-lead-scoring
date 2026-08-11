@@ -126,8 +126,11 @@ function criterionLine(c, i, { targetsAsFilter = false } = {}) {
     const labels = c.rules.options.filter((o) => c.searchTargets.includes(o.id)).map((o) => o.label);
     if (labels.length > 0) filter = `\n   Erforderlich: ${labels.join(', ')}`;
   }
+  // hintLabel benennt Freitext-Hinweise fachlich (z. B. „Gesuchte Rollen / Stellentitel:
+  // Vertriebsleiter, SAP-Berater") — die KI weiß dann, was der Text bedeutet.
+  const hintName = typeof c.hintLabel === 'string' && c.hintLabel.trim() ? c.hintLabel.trim() : 'Suchhinweis';
   const hint = typeof c.searchHint === 'string' && c.searchHint.trim()
-    ? `\n   Suchhinweis: ${c.searchHint.trim()}` : '';
+    ? `\n   ${hintName}: ${c.searchHint.trim()}` : '';
   return `${key(i)}: ${c.name}${desc}\n   Erwarteter Wert: ${valueDescription(c)}${filter}${hint}`;
 }
 

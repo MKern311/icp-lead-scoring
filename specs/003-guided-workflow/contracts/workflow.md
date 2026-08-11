@@ -36,15 +36,21 @@ Tiefen-Screening nie für gespeicherte Leads (Verfassung III). Der Wiedereinstie
 - Suchpräferenz (FR-016): Bei Pre-Screening-Kriterien vom Typ Auswahlliste wird die
   Präferenz als Mehrfachauswahl der Ausprägungen angeklickt (`searchTargets`,
   Options-IDs) — kein Freitext. Freitext-`searchHint` (max. 200 Zeichen, getrimmt)
-  erscheint nur noch bei Zahlenbereichs-Kriterien; Ja/Nein- und Skalen-Kriterien
-  brauchen keine Präferenz-Eingabe. Werte bleiben bei Phasenwechsel erhalten;
+  erscheint bei Zahlenbereichs-Kriterien sowie bei Kriterien mit nicht-leerem
+  `hintLabel` (max. 80 Zeichen) — das Label beschriftet das Feld fachlich (z. B.
+  „Gesuchte Rollen / Stellentitel" beim Stellenanzeigen-Kriterium) und ersetzt im
+  Request das Präfix „Suchhinweis:". Übrige Ja/Nein- und Skalen-Kriterien brauchen
+  keine Präferenz-Eingabe. Werte bleiben bei Phasenwechsel erhalten;
   gelöschte Optionen werden aus `searchTargets` entfernt.
 - Danach Suchparameter: Region (Default „DACH"), Anzahl 5–50 (Default 20), globale
   Hinweise — Vorbelegung wie bisheriger Screening-Lauf.
 - **Gruppierung (FR-015)**: erst Pre-Screening-Kriterien, dann Katalog-Vorschläge,
   dann Qualifizierungskriterien; Phasenwechsel verschiebt zwischen den Gruppen.
 - **Kriterien-Katalog (FR-014)**: `criterionCatalog` in `docs/js/templates.js` (reine
-  Daten, alle Einträge `stage: prescreening` mit Suchhinweis); Übernahme per
+  Daten; Klassen folgen EU-Standards, wo vorhanden: Branche = NACE-Rev.-2-Abschnitte
+  A–S, Mitarbeiter-/Umsatzklassen = EU-KMU-Definition 2003/361/EG; Wachstums-Signale
+  einzeln mit Belegzeitraum 12 Monate, Stellenanzeigen-Rollen als beschriftetes
+  Freitextfeld via `hintLabel`); Übernahme per
   `criterionFromCatalog(entry)` (pure, `core/model.js`) — neue IDs, sofort
   `store.saveProfile`, Eintrag gilt als bestätigt. Testverankert: jeder Katalog-Eintrag
   ergibt ein valides Kriterium (`validateProfile` ohne Fehler), Katalog-Namen sind
@@ -77,10 +83,11 @@ Tiefen-Screening nie für gespeicherte Leads (Verfassung III). Der Wiedereinstie
 - `qualificationQueue(profile, leads)` (in `core/screening.js`): Leads mit
   `source === 'screening'` und mindestens einem Qualifizierungskriterium ohne Wert;
   Bestandsreihenfolge; wirft nie.
-- `model.js`: `searchHint` optional, String, getrimmt, ≤ 200 Zeichen; Validierung
-  lehnt andere Typen ab; `migrateProfile` ergänzt `''`.
-- `profile-io.js`: Export schreibt `searchHint` (auch leer zulässig, dann weglassen
-  erlaubt); Import: fehlend ⇒ `''`, Nicht-String ⇒ Fehler; `schemaVersion` bleibt 2.
+- `model.js`: `searchHint` optional, String, getrimmt, ≤ 200 Zeichen; `hintLabel`
+  optional, String, ≤ 80 Zeichen (beschriftet das Freitextfeld); Validierung
+  lehnt andere Typen ab; `migrateProfile` ergänzt jeweils `''`.
+- `profile-io.js`: Export schreibt `searchHint`/`hintLabel` nur, wenn nicht leer;
+  Import: fehlend ⇒ `''`, Nicht-String ⇒ Fehler; `schemaVersion` bleibt 2.
 - Erweiterter SC-004-Anker: Der serialisierte Request enthält (a) weiterhin keine
   Gewichte/Punkte/Stufen/Leads/Profilnamen und (b) keinen `searchHint` eines
   Qualifizierungskriteriums; der `searchHint` eines Pre-Screening-Kriteriums ist

@@ -18,10 +18,13 @@ Alle Daten bleiben lokal im Browser; es gibt kein Konto und keine Telemetrie.
   (z. B. „bevorzugt 50–250 Mitarbeiter"), der die Online-Recherche lenkt
 - **Geführter Screening-Workflow (vierstufig)**: Der Nav-Punkt „Screening" führt durch
   (1) **Kriterien** — Phasen-Zuordnung mit Pflicht-Bestätigung, anklickbaren
-  Suchpräferenzen (statt Freitext) und einem kategorisierten **Kriterien-Katalog** mit
-  über 20 online recherchierbaren Kriterienarten (Firmografie, Wachstum & Dynamik,
-  Digitale Präsenz, Markt & Netzwerk — inkl. getrennter Signale wie Presse-News,
-  Stellenanzeigen nach Funktionsbereich, Eigentümerstruktur, Kununu-Score),
+  Suchpräferenzen (statt Freitext) und einem kategorisierten **Kriterien-Katalog**
+  online recherchierbarer Kriterienarten; die Klassen folgen EU-Standards, wo es sie
+  gibt (Branche nach NACE Rev. 2, Mitarbeiter- und Umsatzklassen nach der
+  EU-KMU-Definition 2003/361/EG). Wachstumssignale sind fünf konkrete Einzelkriterien
+  mit Belegzeitraum 12 Monate (Expansion/Investition, Stellenanzeigen mit frei
+  benennbaren Rollen/Stellentiteln, Führungswechsel, Übernahme/Fusion,
+  Auszeichnung/Zertifizierung),
   (2) **Kandidaten finden** — günstige Longlist-Suche über die Klassen-Filter,
   (3) **Tiefen-Screening** — je Unternehmen ein eigener Recherche-Lauf über alle
   Pre-Screening-Kriterien mit Quelle, **Konfidenz** (belegt/abgeleitet) und

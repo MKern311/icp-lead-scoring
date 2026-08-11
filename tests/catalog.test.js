@@ -32,7 +32,7 @@ test('Katalog: jede Kategorie aus fester Menge, Belegquelle vorhanden und in des
     const c = criterionFromCatalog(entry);
     assert.ok(c.description.includes('Beleg:'), `${entry.name}: Belegquelle nicht in description`);
   }
-  assert.ok(criterionCatalog.length >= 20, 'Katalog soll granular sein (≥ 20 Einträge)');
+  assert.ok(criterionCatalog.length >= 15, 'Katalog soll granular bleiben (≥ 15 fokussierte Einträge)');
 });
 
 test('Katalog: kategorisierbare Kriterien sind Auswahlfelder mit festen Klassen (FR-407)', () => {
@@ -45,26 +45,56 @@ test('Katalog: kategorisierbare Kriterien sind Auswahlfelder mit festen Klassen 
   }
 });
 
-test('Katalog: Wachstums-Signale einzeln und konkret, mit Belegzeitraum oder Aktualitätsbezug', () => {
+test('Katalog: genau 5 konkrete Wachstums-Signale, Belegzeitraum 12 Monate oder Aktualitätsbezug', () => {
   const growth = criterionCatalog.filter((e) => e.category === 'Wachstum & Dynamik');
-  assert.ok(growth.length >= 8, 'mindestens 8 getrennte Signale');
+  assert.equal(growth.length, 5, 'genau die 5 vereinbarten Signale — kein übergreifendes Sammel-Signal');
   assert.ok(growth.every((e) => e.type === 'boolean'));
   for (const e of growth) {
-    assert.ok(/\d+\s*Monat|[Aa]ktuell/.test(e.description), `${e.name}: Belegzeitraum/Aktualität fehlt in description`);
+    assert.ok(/12\s*Monat|[Aa]ktuell/.test(e.description), `${e.name}: Belegzeitraum (12 Monate) oder Aktualität fehlt in description`);
   }
   const names = growth.map((e) => e.name);
   assert.ok(names.some((n) => n.includes('Expansion')));
-  assert.ok(names.some((n) => n.includes('Stellenanzeigen: IT')));
-  assert.ok(names.some((n) => n.includes('Stellenanzeigen: Vertrieb')));
+  assert.ok(names.some((n) => n.includes('Stellenanzeigen')));
+  assert.ok(names.some((n) => n.includes('Führungswechsel')));
+  assert.ok(names.some((n) => n.includes('Übernahme')));
+  assert.ok(names.some((n) => n.includes('Auszeichnung')));
+  assert.ok(!names.some((n) => n.startsWith('Stellenanzeigen:')), 'keine getrennten Stellenanzeigen-Varianten — Rollen kommen als Freitext');
 });
 
-test('Katalog: selects ohne Freitext-Hint (Auswahl ersetzt Freitext), andere mit konkretem Hinweis', () => {
+test('Katalog: selects ohne Freitext-Hint, andere mit konkretem Hinweis oder beschriftetem Freitextfeld', () => {
   for (const entry of criterionCatalog) {
     if (entry.type === 'select') {
       assert.equal(entry.searchHint, undefined, `${entry.name}: select braucht keinen Freitext-Hint`);
+      assert.equal(entry.hintLabel, undefined, `${entry.name}: select braucht kein Freitextfeld`);
     } else {
-      assert.ok((entry.searchHint || '').trim().length > 0, `${entry.name}: konkreter Hinweis fehlt`);
+      assert.ok((entry.searchHint || '').trim().length > 0 || (entry.hintLabel || '').trim().length > 0,
+        `${entry.name}: konkreter Hinweis oder hintLabel fehlt`);
     }
+  }
+  // Stellenanzeigen: Rollen/Stellentitel als beschriftetes Freitextfeld (Nutzer-Eingabe)
+  const jobs = criterionCatalog.find((e) => e.name.includes('Stellenanzeigen'));
+  assert.ok(jobs, 'Stellenanzeigen-Kriterium fehlt');
+  assert.equal(jobs.hintLabel, 'Gesuchte Rollen / Stellentitel');
+  assert.equal(criterionFromCatalog(jobs).hintLabel, 'Gesuchte Rollen / Stellentitel');
+});
+
+test('Katalog: EU-Standards — NACE-Branchen, EU-KMU-Klassen, Region ohne Sonstige, Streichungen', () => {
+  const branche = criterionCatalog.find((e) => e.name === 'Branche');
+  assert.ok(branche.description.includes('NACE'), 'Branche folgt NACE');
+  assert.equal(branche.rules.options.length, 19, 'NACE-Abschnitte A–S');
+  const groesse = criterionCatalog.find((e) => e.name.startsWith('Unternehmensgröße'));
+  assert.equal(groesse.type, 'select');
+  assert.equal(groesse.rules.options.length, 4, 'EU-KMU: Kleinst / klein / mittel / groß');
+  assert.ok(groesse.rules.options.some((o) => o.label.includes('Kleinstunternehmen')));
+  assert.ok(groesse.description.includes('2003/361'));
+  const umsatz = criterionCatalog.find((e) => e.name === 'Umsatzklasse');
+  assert.equal(umsatz.rules.options.length, 4);
+  assert.ok(umsatz.description.includes('2003/361'));
+  const region = criterionCatalog.find((e) => e.name.startsWith('Region'));
+  assert.ok(!region.rules.options.some((o) => o.label === 'Sonstige'), 'Region ohne „Sonstige"');
+  const names = criterionCatalog.map((e) => e.name);
+  for (const gone of ['Online-Shop', 'Website-Reife', 'Mehrsprachige', 'Messe', 'Kununu']) {
+    assert.ok(!names.some((n) => n.includes(gone)), `„${gone}" soll entfernt sein`);
   }
 });
 

@@ -23,6 +23,7 @@ export function exportProfile(profile, appVersion = '2') {
         // Suchparameter nur schreiben, wenn gesetzt — leere Felder blähen Exporte nicht auf.
         // searchTargets als Options-Labels (Export kennt keine IDs).
         ...(typeof c.searchHint === 'string' && c.searchHint.trim() ? { searchHint: c.searchHint } : {}),
+        ...(typeof c.hintLabel === 'string' && c.hintLabel.trim() ? { hintLabel: c.hintLabel } : {}),
         ...(c.type === 'select' && Array.isArray(c.searchTargets) && c.searchTargets.length > 0
           ? { searchTargets: c.rules.options.filter((o) => c.searchTargets.includes(o.id)).map((o) => o.label) }
           : {}),
@@ -81,6 +82,9 @@ export function importProfile(data) {
     if (c.searchHint !== undefined && (typeof c.searchHint !== 'string' || c.searchHint.length > 200)) {
       errors.push(`${label}: Suchhinweis muss Text mit max. 200 Zeichen sein.`);
     }
+    if (c.hintLabel !== undefined && (typeof c.hintLabel !== 'string' || c.hintLabel.length > 80)) {
+      errors.push(`${label}: Beschriftung des Suchhinweises muss Text mit max. 80 Zeichen sein.`);
+    }
     if (c.searchTargets !== undefined && (!Array.isArray(c.searchTargets) || c.searchTargets.some((t) => typeof t !== 'string'))) {
       errors.push(`${label}: Suchauswahl muss eine Liste von Ausprägungs-Labels sein.`);
     }
@@ -134,6 +138,7 @@ export function importProfile(data) {
         // v1-Exporte kennen keine Phase — sichere Voreinstellung (FR-002)
         stage: STAGES.includes(c.stage) ? c.stage : 'qualification',
         searchHint: typeof c.searchHint === 'string' ? c.searchHint : '',
+        hintLabel: typeof c.hintLabel === 'string' ? c.hintLabel : '',
         searchTargets,
         rules,
       });

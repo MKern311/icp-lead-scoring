@@ -24,7 +24,7 @@ export function createProfile(name = '') {
 }
 
 export function createCriterion(type) {
-  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false, stage: 'qualification', searchHint: '', searchTargets: [] };
+  const base = { id: uuid(), name: '', description: '', type, weight: 10, knockout: false, stage: 'qualification', searchHint: '', hintLabel: '', searchTargets: [] };
   switch (type) {
     case 'select':
       base.rules = {
@@ -64,6 +64,7 @@ export function criterionFromCatalog(entry) {
   c.weight = typeof entry.weight === 'number' ? entry.weight : 10;
   c.stage = 'prescreening';
   c.searchHint = entry.searchHint || '';
+  c.hintLabel = entry.hintLabel || '';
   if (entry.rules) {
     c.rules = entry.type === 'select'
       ? { options: entry.rules.options.map((o) => ({ id: uuid(), label: o.label, points: o.points })) }
@@ -84,6 +85,7 @@ export function migrateProfile(profile) {
     for (const c of profile.criteria) {
       if (!STAGES.includes(c.stage)) c.stage = 'qualification';
       if (typeof c.searchHint !== 'string') c.searchHint = '';
+      if (typeof c.hintLabel !== 'string') c.hintLabel = '';
       if (!Array.isArray(c.searchTargets)) c.searchTargets = [];
     }
   }
@@ -126,6 +128,9 @@ function validateCriterion(c, idx, errors) {
   if (!STAGES.includes(c.stage)) errors.push({ field, message: `${label}: ungültige Screening-Phase.` });
   if (c.searchHint !== undefined && (typeof c.searchHint !== 'string' || c.searchHint.length > 200)) {
     errors.push({ field, message: `${label}: Suchhinweis muss Text mit max. 200 Zeichen sein.` });
+  }
+  if (c.hintLabel !== undefined && (typeof c.hintLabel !== 'string' || c.hintLabel.length > 80)) {
+    errors.push({ field, message: `${label}: Beschriftung des Suchhinweises muss Text mit max. 80 Zeichen sein.` });
   }
   if (c.searchTargets !== undefined) {
     const optionIds = c.type === 'select' ? new Set((c.rules?.options || []).map((o) => o.id)) : null;

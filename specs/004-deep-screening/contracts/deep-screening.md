@@ -33,7 +33,9 @@ estimateDeepCost(n) → { min, max }                      // EUR, COST_ESTIMATES
 ## D: Deep-Request (SC-402)
 
 - Serialisiert ausschließlich: `name`, `website` (falls vorhanden), Region und
-  **alle** Pre-Screening-Kriterien (inkl. `searchHint`-Zeilen; `searchTargets`
+  **alle** Pre-Screening-Kriterien (inkl. `searchHint`-Zeilen; hat ein Kriterium
+  ein `hintLabel`, ersetzt es das Zeilen-Präfix „Suchhinweis:" — z. B. „Gesuchte
+  Rollen / Stellentitel: Vertriebsleiter, SAP-Berater"; `searchTargets`
   werden im Deep NICHT serialisiert — bei Faktenprüfung gibt es keine Präferenz).
 - Niemals: Longlist-Werte, andere Kandidatennamen, gespeicherte Leads, Gewichte,
   Punktwerte, Stufen, Qualifizierungskriterien, Profilname (testverankert: Kandidat

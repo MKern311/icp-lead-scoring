@@ -156,8 +156,8 @@ function criterionCard(c, index) {
         </div>
         <div class="hint">Übertragen werden nur die angeklickten Ausprägungen als Präferenz — niemals Gewichte oder Punktwerte.</div></div>` : ''}
       ${c.stage === 'prescreening' && c.type !== 'select' ? `
-      <div class="field"><label>Suchhinweis für das Online-Screening (optional)</label>
-        <input type="text" maxlength="200" data-bind="c:${c.id}:searchHint" value="${esc(c.searchHint || '')}" placeholder="z. B. bevorzugt 50–250 Mitarbeiter">
+      <div class="field"><label>${esc((c.hintLabel || '').trim() || 'Suchhinweis für das Online-Screening (optional)')}</label>
+        <input type="text" maxlength="200" data-bind="c:${c.id}:searchHint" value="${esc(c.searchHint || '')}" placeholder="${(c.hintLabel || '').trim() ? 'z. B. Vertriebsleiter, SAP-Berater — mehrere durch Komma trennen' : 'z. B. bevorzugt 50–250 Mitarbeiter'}">
         <div class="hint">Wird bei der Recherche mit übertragen — niemals Gewichte oder Punktwerte.</div></div>` : ''}
       ${rulesEditor(c)}
     </div>`;

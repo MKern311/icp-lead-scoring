@@ -109,8 +109,9 @@ function drawStep1(body) {
 
   const criterionRow = (c) => {
     const isConfirmed = confirmed.has(c.id);
-    // Suchpräferenz (FR-016): Auswahl-Kriterien per Klick aus den Ausprägungen,
-    // Freitext nur noch bei Zahlenbereichen; Signale/Skalen brauchen keine Präferenz.
+    // Suchpräferenz (FR-016): Auswahl-Kriterien per Klick aus den Ausprägungen.
+    // Freitext nur bei Zahlenbereichen und bei Kriterien mit hintLabel (z. B.
+    // gesuchte Stellentitel); übrige Signale/Skalen brauchen keine Präferenz.
     let hintField = '';
     if (c.stage === 'prescreening' && c.type === 'select') {
       hintField = `
@@ -121,12 +122,15 @@ function drawStep1(body) {
         </div>
         <div class="hint">Ohne Auswahl wird ohne Filter gesucht; bewertet werden immer alle Ausprägungen.</div>
       </div>`;
-    } else if (c.stage === 'prescreening' && c.type === 'range') {
+    } else if (c.stage === 'prescreening' && (c.type === 'range' || (c.hintLabel || '').trim())) {
+      const labeled = (c.hintLabel || '').trim();
       hintField = `
       <div class="field grow">
-        <label>Suchhinweis (optional)</label>
+        <label>${esc(labeled || 'Suchhinweis (optional)')}</label>
         <input type="text" maxlength="200" data-hint="${c.id}" value="${esc(c.searchHint || '')}"
-          placeholder="Wonach soll gesucht werden? z. B. bevorzugt 50–250 Mitarbeiter">
+          placeholder="${labeled
+            ? 'z. B. Vertriebsleiter, SAP-Berater, Marketing Manager — mehrere durch Komma trennen'
+            : 'Wonach soll gesucht werden? z. B. bevorzugt 50–250 Mitarbeiter'}">
       </div>`;
     }
     return `

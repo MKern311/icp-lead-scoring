@@ -128,6 +128,23 @@ test('searchHint überlebt den Roundtrip; leere Hints werden nicht exportiert', 
   assert.equal(imported.criteria[1].searchHint, '');
 });
 
+test('hintLabel überlebt den Roundtrip; leer wird nicht exportiert, Nicht-String abgelehnt', () => {
+  const original = sampleProfile();
+  original.criteria[0].stage = 'prescreening';
+  original.criteria[0].hintLabel = 'Gesuchte Rollen / Stellentitel';
+  const out = exportProfile(original);
+  assert.equal(out.profile.criteria[0].hintLabel, 'Gesuchte Rollen / Stellentitel');
+  assert.equal('hintLabel' in out.profile.criteria[1], false);
+  const { profile: imported, errors } = importProfile(out);
+  assert.deepEqual(errors, []);
+  assert.equal(imported.criteria[0].hintLabel, 'Gesuchte Rollen / Stellentitel');
+  assert.equal(imported.criteria[1].hintLabel, '');
+  out.profile.criteria[0].hintLabel = 42;
+  const rejected = importProfile(out);
+  assert.equal(rejected.profile, null);
+  assert.ok(rejected.errors.some((e) => e.includes('Beschriftung')));
+});
+
 test('searchTargets überleben den Roundtrip als Options-Labels', () => {
   const original = sampleProfile();
   original.criteria[0].stage = 'prescreening';

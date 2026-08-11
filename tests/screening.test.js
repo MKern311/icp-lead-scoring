@@ -211,6 +211,15 @@ test('buildDeepScreeningRequest: Suchhinweise dabei, Suchpräferenzen nicht; wir
   assert.throws(() => buildDeepScreeningRequest(f.p, { name: '  ' }), /Firmenname/);
 });
 
+test('buildDeepScreeningRequest: hintLabel beschriftet den Freitext-Hinweis (Stellenanzeigen-Rollen)', () => {
+  const f = fixture();
+  f.reife.hintLabel = 'Gesuchte Rollen / Stellentitel';
+  f.reife.searchHint = 'Vertriebsleiter, SAP-Berater';
+  const s = JSON.stringify(buildDeepScreeningRequest(f.p, { name: 'Muster GmbH' }));
+  assert.ok(s.includes('Gesuchte Rollen / Stellentitel: Vertriebsleiter, SAP-Berater'));
+  assert.ok(!s.includes('Suchhinweis: Vertriebsleiter'));
+});
+
 function deepOutput() {
   return {
     found: true,

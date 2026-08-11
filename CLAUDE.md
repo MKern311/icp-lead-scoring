@@ -27,9 +27,13 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   Bewertungen werden nie gespeichert, immer via `evaluate(profile, lead)` berechnet
 - Screening: Kriterien haben `stage` (`prescreening` = online recherchierbar,
   `qualification` = 2. Screening; Default qualification), `searchTargets` (bevorzugte
-  Options-IDs bei Auswahl-Kriterien, per Klick — serialisiert als „Bevorzugt:"-Labels)
-  und optional `searchHint` (Freitext ≤ 200 Zeichen, UI nur noch bei range; beides nur
-  für Pre-Screening serialisiert). `core/screening.js` ist
+  Options-IDs bei Auswahl-Kriterien, per Klick — Longlist nutzt sie als harte
+  „Erforderlich:"-Filter), optional `searchHint` (Freitext ≤ 200 Zeichen; UI bei range
+  und bei Kriterien mit `hintLabel`) und optional `hintLabel` (≤ 80 Zeichen,
+  beschriftet das Freitextfeld und ersetzt im Request das Präfix „Suchhinweis:" —
+  z. B. Stellenanzeigen-Rollen); alles nur für Pre-Screening serialisiert. Katalog-
+  Klassen folgen EU-Standards (NACE Rev. 2 Abschnitte, EU-KMU-Definition 2003/361/EG),
+  Wachstumssignale sind 5 Einzelkriterien mit Belegzeitraum 12 Monate. `core/screening.js` ist
   pure und darf nur Pre-Screening-Kriterien serialisieren (testverankert, SC-004); die KI
   liefert nur Rohwerte + Quellen, nie Punkte. API-Schlüssel unter `icp.v1.apikey`, nie
   exportieren. Die Route `#/screening` rendert den geführten Workflow (`ui/workflow.js`,
