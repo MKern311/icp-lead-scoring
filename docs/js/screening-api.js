@@ -22,8 +22,9 @@ async function errorDetail(res) {
 }
 
 // Führt den Lauf aus; behandelt pause_turn (Server-Tool-Iterationslimit) durch
-// Fortsetzungs-Requests. Liefert { output, usage } oder wirft mit deutscher Meldung.
-export async function runScreening(apiKey, requestBody, onStatus = () => {}) {
+// Fortsetzungs-Requests. Optionales AbortSignal (Feature 004: Tiefen-Screening
+// abbrechbar). Liefert { output, usage } oder wirft mit deutscher Meldung.
+export async function runScreening(apiKey, requestBody, onStatus = () => {}, { signal } = {}) {
   let messages = [...requestBody.messages];
 
   for (let attempt = 0; attempt <= MAX_CONTINUATIONS; attempt++) {
@@ -42,8 +43,14 @@ export async function runScreening(apiKey, requestBody, onStatus = () => {}) {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({ ...requestBody, messages }),
+        signal,
       });
-    } catch {
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        const err = new Error('Recherche abgebrochen.');
+        err.aborted = true;
+        throw err;
+      }
       throw new Error('Keine Verbindung zum Dienst — bitte Internetverbindung prüfen.');
     }
 

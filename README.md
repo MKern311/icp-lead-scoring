@@ -16,24 +16,23 @@ Alle Daten bleiben lokal im Browser; es gibt kein Konto und keine Telemetrie.
   (firmografisch, online recherchierbar) oder **Qualifizierung** (2. Screening, manuell
   im Kundenkontakt); Pre-Screening-Kriterien können einen **Suchhinweis** tragen
   (z. B. „bevorzugt 50–250 Mitarbeiter"), der die Online-Recherche lenkt
-- **Geführter Screening-Workflow**: Der Nav-Punkt „Screening" führt in drei Schritten
-  durch den Prozess — (1) Phasen-Zuordnung aller Kriterien mit Pflicht-Bestätigung und
-  Suchpräferenzen, gruppiert nach „online recherchierbar" und „Qualifizierung",
-  inklusive eines **Kriterien-Katalogs** mit neun recherchierbaren Kriterienarten zum
-  Übernehmen per Klick — kategorisierbare als vorgegebene Auswahlfelder (Branche,
-  Mitarbeiter-Klassen, Region, Umsatzklasse, Firmenalter) mit **anklickbarer
-  Suchpräferenz statt Freitext**, dazu getrennte Wachstumssignale (Presse/News,
-  Stellenanzeigen) sowie Digitalisierungs-Reife und Online-Sichtbarkeit,
-  (2) Online-Screening
-  mit Prüfung und Übernahme der Kandidaten, (3) geführte Qualifizierung Lead für Lead
-  mit Live-Bewertung und Abschluss-Übersicht; offene Screening-Leads werden beim
-  Wiedereinstieg direkt zur Qualifizierung angeboten
-- **Online-Screening** *(optional, Schritt 2)*: Mit eigenem Anthropic-API-Schlüssel
-  recherchiert das Tool per KI-Websuche Unternehmen, die zu den Pre-Screening-Kriterien
-  passen (Region und Anzahl wählbar), inkl. Quellen-URLs je Angabe. Der Schlüssel bleibt
-  lokal; übertragen werden nur die Pre-Screening-Kriterien samt Suchhinweisen, nie
-  Gewichte, Leads oder Bewertungen. Der Lauf kostet über den eigenen Schlüssel grob
-  0,50–1,50 €.
+- **Geführter Screening-Workflow (vierstufig)**: Der Nav-Punkt „Screening" führt durch
+  (1) **Kriterien** — Phasen-Zuordnung mit Pflicht-Bestätigung, anklickbaren
+  Suchpräferenzen (statt Freitext) und einem kategorisierten **Kriterien-Katalog** mit
+  über 20 online recherchierbaren Kriterienarten (Firmografie, Wachstum & Dynamik,
+  Digitale Präsenz, Markt & Netzwerk — inkl. getrennter Signale wie Presse-News,
+  Stellenanzeigen nach Funktionsbereich, Eigentümerstruktur, Kununu-Score),
+  (2) **Kandidaten finden** — günstige Longlist-Suche über die Klassen-Filter,
+  (3) **Tiefen-Screening** — je Unternehmen ein eigener Recherche-Lauf über alle
+  Pre-Screening-Kriterien mit Quelle, **Konfidenz** (belegt/abgeleitet) und
+  **Belegdatum** je Wert; sequenziell, abbrechbar, fortsetzbar; auch für manuell
+  eingegebene Firmen, (4) **Qualifizierung** Lead für Lead mit Live-Bewertung;
+  offene Screening-Leads werden beim Wiedereinstieg direkt angeboten
+- **Online-Recherche** *(optional, Schritte 2–3)*: Mit eigenem Anthropic-API-Schlüssel
+  per KI-Websuche, inkl. Quellen-URLs je Angabe; Werte ohne Quelle werden verworfen.
+  Der Schlüssel bleibt lokal; übertragen werden nur Pre-Screening-Kriterien samt
+  Suchauswahl, nie Gewichte, Leads oder Bewertungen. Kosten grob: Longlist 0,30–0,80 €,
+  Tiefen-Screening 0,15–0,35 € je Unternehmen (eigener Schlüssel).
 - **Generik**: Profile als JSON-Datei exportieren/importieren — andere Nutzer erhalten
   identische Bewertungslogik; zwei anpassbare Beispiel-Vorlagen sind enthalten
 - **Offline-Kern**: Alle Kernfunktionen nach dem ersten Laden auch ohne Internetverbindung

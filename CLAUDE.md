@@ -11,8 +11,11 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Feature 001: `specs/001-icp-lead-scoring/` (Scoring-Kern, CSV, Profile)
 - Feature 002: `specs/002-online-screening/` (Kriterien-Phasen, Online-Pre-Screening;
   Screening-Regeln fixiert in `contracts/screening.md`)
-- Feature 003: `specs/003-guided-workflow/` (geführter 3-Schritte-Workflow auf
-  `#/screening`, Suchhinweise je Kriterium; Regeln in `contracts/workflow.md`)
+- Feature 003: `specs/003-guided-workflow/` (geführter Workflow auf `#/screening`,
+  Suchpräferenzen je Kriterium; Regeln in `contracts/workflow.md`)
+- Feature 004: `specs/004-deep-screening/` (Zweiphasen-Screening: Longlist über
+  Klassen-Filter + Tiefen-Screening je Unternehmen mit Konfidenz/Belegdatum;
+  Regeln fixiert in `contracts/deep-screening.md`)
 
 ## Stack & Regeln
 
@@ -30,9 +33,13 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   pure und darf nur Pre-Screening-Kriterien serialisieren (testverankert, SC-004); die KI
   liefert nur Rohwerte + Quellen, nie Punkte. API-Schlüssel unter `icp.v1.apikey`, nie
   exportieren. Die Route `#/screening` rendert den geführten Workflow (`ui/workflow.js`,
-  3 Schritte); `qualificationQueue` bestimmt offene Screening-Leads für Schritt 3.
-  Schritt 1 gruppiert (recherchierbar zuerst) und bietet `criterionCatalog`
-  (`templates.js`, reine Daten) per `criterionFromCatalog` zum Übernehmen an.
+  4 Schritte: Kriterien → Longlist → Tiefen-Screening → Qualifizierung). Longlist nutzt
+  nur select-Kriterien (`longlistCriteria`, Targets = harte Filter); Deep recherchiert
+  je Unternehmen (`buildDeepScreeningRequest`, Konfidenz `direct|inferred` +
+  Belegdatum `JJJJ-MM` je Wert, Quellenpflicht in `parseDeepResult`) — nie für
+  gespeicherte Leads. `qualificationQueue` bestimmt offene Screening-Leads für
+  Schritt 4. Katalog: `criterionCatalog` (`templates.js`, kategorisierte reine Daten)
+  per `criterionFromCatalog` übernehmen.
 - Tests: `node --test tests/` (Node ≥ 20); Scoring-Regeln sind in
   `specs/001-icp-lead-scoring/contracts/scoring-engine.md` fixiert — Änderungen dort zuerst
 - UI-Texte deutsch, Code-Bezeichner englisch; Nutzereingaben beim Rendern immer escapen

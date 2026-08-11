@@ -7,6 +7,12 @@ Request-Aufbau, Antwort-Parsing und Netzwerkschicht maßgeblich.
 
 ## W1: Einstieg & Schritt-Gates
 
+**Feature 004**: Der Workflow ist vierstufig — 1 Kriterien · 2 Kandidaten finden
+(Longlist) · 3 Tiefen-Screening (optional überspringbar) · 4 Qualifizierung.
+Schritt-2/3-Regeln in `specs/004-deep-screening/contracts/deep-screening.md`;
+Tiefen-Screening nie für gespeicherte Leads (Verfassung III). Der Wiedereinstieg
+über `qualificationQueue` zielt auf Schritt 4.
+
 - Route `#/screening` rendert den Workflow; es gibt keinen weiteren Screening-Einstieg.
 - Ohne aktives Profil: Erklärung + Verweis auf Profil-Anlage; kein Schritt startet.
 - Schritt 1 → 2 nur, wenn (a) jedes Kriterium des aktiven Profils in dieser Sitzung

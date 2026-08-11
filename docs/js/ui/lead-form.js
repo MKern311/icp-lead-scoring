@@ -124,8 +124,13 @@ function criterionField(c) {
       input = `<input type="number" step="1" min="${c.rules.min}" max="${c.rules.max}" data-criterion="${c.id}" value="${value ?? ''}" placeholder="${c.rules.min}–${c.rules.max}">`;
       break;
   }
+  // Konfidenz + Belegdatum aus dem Tiefen-Screening (Feature 004) — reine Metadaten
+  const conf = working.confidence?.[c.id];
+  const confBadge = conf === 'direct' ? ' <span class="badge badge-confidence-direct">belegt</span>'
+    : conf === 'inferred' ? ' <span class="badge badge-confidence-inferred">abgeleitet</span>' : '';
+  const evidenceDate = working.evidenceDates?.[c.id] ? ` · Stand ${esc(working.evidenceDates[c.id])}` : '';
   const source = working.sources?.[c.id]
-    ? `<div class="hint">Quelle: <a href="${esc(working.sources[c.id])}" target="_blank" rel="noopener noreferrer">${esc(working.sources[c.id])}</a></div>`
+    ? `<div class="hint">Quelle: <a href="${esc(working.sources[c.id])}" target="_blank" rel="noopener noreferrer">${esc(working.sources[c.id])}</a>${confBadge}${evidenceDate}</div>`
     : '';
   return `
     <div class="field">

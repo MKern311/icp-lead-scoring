@@ -5,11 +5,18 @@ Verbindlich. Änderungen hier zuerst; Tests in `tests/screening.test.js` spiegel
 ## Pure API (core/screening.js — getestet)
 
 ```js
-buildScreeningRequest(profile, { region, count, hints }) → requestBody   // deterministisch
+buildLonglistRequest(profile, { region, count, hints }) → requestBody    // Feature 004: nur select-Kriterien
+buildDeepScreeningRequest(profile, { name, website }, { region }) → requestBody  // Feature 004: je Unternehmen
 parseCandidates(outputObject, profile) → { candidates, warnings }        // wirft nie
+parseDeepResult(output, profile, { name }) → { candidate|null, warnings }
 candidateToLead(candidate, profile) → lead                               // source: "screening"
 prescreeningCriteria(profile) → Criterion[]                              // stage === "prescreening"
 ```
+
+**Hinweis (Feature 004)**: Der frühere Sammellauf `buildScreeningRequest` wurde durch
+das Zweiphasen-Modell ersetzt — Regeln in
+`specs/004-deep-screening/contracts/deep-screening.md`. Die folgenden Request-Regeln
+gelten sinngemäß für beide Request-Arten weiter (SC-004-Basis).
 
 ## Request-Regeln (Constitution III c, SC-004)
 

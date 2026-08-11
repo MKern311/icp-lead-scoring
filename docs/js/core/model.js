@@ -53,12 +53,14 @@ export function createTier(label, minScore) {
   return { id: uuid(), label, minScore };
 }
 
-// Übernahme eines Katalog-Eintrags (FR-014): neue IDs, Phase Pre-Screening,
-// Regeln kopiert — der Katalog selbst bleibt unverändert (reine Daten).
+// Übernahme eines Katalog-Eintrags (FR-014/FR-407): neue IDs, Phase Pre-Screening,
+// Regeln kopiert, Belegquelle (evidence) in die Beschreibung übernommen — der
+// Katalog selbst bleibt unverändert (reine Daten).
 export function criterionFromCatalog(entry) {
   const c = createCriterion(entry.type);
   c.name = entry.name;
-  c.description = entry.description || '';
+  c.description = [entry.description || '', entry.evidence ? `Beleg: ${entry.evidence}.` : '']
+    .filter(Boolean).join(' ').slice(0, 500);
   c.weight = typeof entry.weight === 'number' ? entry.weight : 10;
   c.stage = 'prescreening';
   c.searchHint = entry.searchHint || '';

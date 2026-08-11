@@ -1,16 +1,19 @@
-// Geführter Screening-Workflow (Feature 003, contracts/workflow.md):
-// Schritt 1 Phasen-Zuordnung mit Pflicht-Bestätigung + Suchhinweise,
-// Schritt 2 Online-Screening mit Übernahme (ersetzt die frühere Einzelansicht),
-// Schritt 3 geführte Qualifizierung Lead für Lead. Der Workflow-Zustand ist
-// flüchtig — persistiert wird nur über Profil, Leads und API-Schlüssel (FR-010).
+// Geführter Screening-Workflow (Features 003 + 004, contracts/workflow.md +
+// contracts/deep-screening.md): Schritt 1 Phasen-Zuordnung mit Katalog,
+// Schritt 2 Longlist (Klassen-Filter), Schritt 3 Tiefen-Screening je Unternehmen
+// (Konfidenz + Belegdatum, abbrechbar), Schritt 4 Qualifizierung Lead für Lead.
+// Der Workflow-Zustand ist flüchtig — persistiert wird nur über Profil, Leads und
+// API-Schlüssel (FR-010). Tiefen-Screening nie für gespeicherte Leads (Verfassung III).
 
 import * as store from '../store.js';
 import { evaluate } from '../core/scoring.js';
 import { criterionFromCatalog } from '../core/model.js';
 import { criterionCatalog } from '../templates.js';
 import {
-  prescreeningCriteria, buildScreeningRequest, parseCandidates, candidateToLead,
-  qualificationQueue,
+  prescreeningCriteria, longlistCriteria,
+  buildLonglistRequest, buildDeepScreeningRequest,
+  parseCandidates, parseDeepResult, mergeDeepIntoCandidate, candidateToLead,
+  qualificationQueue, estimateDeepCost, COST_ESTIMATES,
 } from '../core/screening.js';
 import { runScreening } from '../screening-api.js';
 import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue } from '../app.js';
@@ -21,23 +24,25 @@ let profile = null;
 let step = 1;
 let confirmed = new Set();                       // in dieser Sitzung aktiv bestätigte Kriterien
 let params = { region: 'DACH', count: 20, hints: '' };
-let running = false;
-let result = null;                               // Schritt-2-Ergebnis { candidates, warnings, region, selected }
-let queue = [];                                  // Schritt-3-Warteschlange (Lead-IDs)
+let running = false;                             // Longlist-Lauf aktiv
+let result = null;                               // Longlist-Ergebnis { candidates, warnings, region, selected }
+let deepRun = null;                              // { entries, running, controller } — flüchtig
+let queue = [];                                  // Schritt-4-Warteschlange (Lead-IDs)
 let position = 0;
-let processed = new Set();                       // gespeicherte Leads
-let skipped = new Set();                         // übersprungene Leads (bleiben offen)
-let drafts = new Map();                          // leadId → ungespeicherte Eingaben (W4: „Zurück")
+let processed = new Set();
+let skipped = new Set();
+let drafts = new Map();
 let finished = false;
 
 export function render(section) {
   container = section;
   profile = store.getActiveProfile();
-  if (!running) {
+  if (!running && !deepRun?.running) {
     // Neueinstieg setzt die Führung zurück — gespeicherte Daten bleiben maßgeblich (FR-010)
     step = 1;
     confirmed = new Set();
     result = null;
+    deepRun = null;
     queue = [];
     position = 0;
     processed = new Set();
@@ -57,11 +62,11 @@ function goToStep(n) {
 }
 
 function stepsIndicator() {
-  const labels = ['Kriterien bestätigen', 'Online-Screening', 'Qualifizierung'];
+  const labels = ['Kriterien', 'Kandidaten finden', 'Tiefen-Screening', 'Qualifizierung'];
   return `<div class="workflow-steps">${labels.map((label, i) => `
     <span class="step ${step === i + 1 ? 'active' : ''} ${step > i + 1 ? 'done' : ''}">
       <span class="num">${step > i + 1 ? '✓' : i + 1}</span> ${label}
-    </span>${i < 2 ? '<span class="sep">→</span>' : ''}`).join('')}
+    </span>${i < labels.length - 1 ? '<span class="sep">→</span>' : ''}`).join('')}
   </div>`;
 }
 
@@ -83,15 +88,17 @@ function draw() {
   const body = container.querySelector('#wf-body');
   if (step === 1) drawStep1(body);
   else if (step === 2) drawStep2(body);
-  else drawStep3(body);
+  else if (step === 3) drawStep3(body);
+  else drawStep4(body);
 }
 
-// --- Schritt 1: Phasen-Zuordnung mit Pflicht-Bestätigung + Suchhinweise (W2) ---
+// --- Schritt 1: Phasen-Zuordnung + kategorisierter Katalog (W2, FR-014/015/016) ---
 
 function drawStep1(body) {
   const resume = qualificationQueue(profile, store.listLeads(profile.id));
   const open = profile.criteria.filter((c) => !confirmed.has(c.id));
   const pre = prescreeningCriteria(profile);
+  const longlist = longlistCriteria(profile);
   const allConfirmed = open.length === 0;
 
   const resumeBlock = resume.length > 0 && !finished ? `
@@ -108,11 +115,11 @@ function drawStep1(body) {
     if (c.stage === 'prescreening' && c.type === 'select') {
       hintField = `
       <div class="field grow">
-        <label>Bevorzugt suchen nach (Mehrfachauswahl)</label>
+        <label>Bevorzugt suchen nach (Mehrfachauswahl — wirkt als harter Filter der Kandidatensuche)</label>
         <div class="target-picker">
           ${c.rules.options.map((o) => `<label><input type="checkbox" data-target="${c.id}:${o.id}" ${(c.searchTargets || []).includes(o.id) ? 'checked' : ''}> ${esc(o.label)}</label>`).join('')}
         </div>
-        <div class="hint">Ohne Auswahl wird ohne Präferenz gesucht; bewertet werden immer alle Ausprägungen.</div>
+        <div class="hint">Ohne Auswahl wird ohne Filter gesucht; bewertet werden immer alle Ausprägungen.</div>
       </div>`;
     } else if (c.stage === 'prescreening' && c.type === 'range') {
       hintField = `
@@ -149,21 +156,28 @@ function drawStep1(body) {
     .map((entry, idx) => ({ entry, idx }))
     .filter(({ entry }) => !existingNames.has(entry.name.trim().toLowerCase()));
 
+  const categories = [...new Set(criterionCatalog.map((e) => e.category))];
   const catalogBlock = suggestions.length > 0 ? `
     <div class="card">
       <h3>Vorschläge: das kann online recherchiert werden</h3>
       <p class="muted">Per Klick als Pre-Screening-Kriterium übernehmen — Gewichte und
-      Punktregeln passen Sie danach im Profil-Editor an.</p>
-      ${suggestions.map(({ entry, idx }) => `
-        <div class="criterion-head" style="margin-bottom: var(--space-2)">
-          <div class="field grow">
-            <label>${esc(entry.name)}</label>
-            <div class="hint">${esc(entry.description)}${entry.type === 'select'
-              ? ` · Klassen: ${entry.rules.options.map((o) => esc(o.label)).join(', ')}`
-              : entry.searchHint ? ` · ${esc(entry.searchHint)}` : ''}</div>
-          </div>
-          <button class="btn btn-small" data-add-catalog="${idx}">+ Übernehmen</button>
-        </div>`).join('')}
+      Punktregeln passen Sie danach im Profil-Editor an. „Beleg" nennt die Quellen, mit
+      denen die Recherche den Wert nachweist.</p>
+      ${categories.map((cat) => {
+        const items = suggestions.filter(({ entry }) => entry.category === cat);
+        if (items.length === 0) return '';
+        return `<h4 class="catalog-category">${esc(cat)}</h4>
+          ${items.map(({ entry, idx }) => `
+          <div class="criterion-head" style="margin-bottom: var(--space-2)">
+            <div class="field grow">
+              <label>${esc(entry.name)}</label>
+              <div class="hint">${esc(entry.description)}${entry.type === 'select'
+                ? ` · Klassen: ${entry.rules.options.map((o) => esc(o.label)).join(', ')}` : ''}
+                · Beleg: ${esc(entry.evidence)}</div>
+            </div>
+            <button class="btn btn-small" data-add-catalog="${idx}">+ Übernehmen</button>
+          </div>`).join('')}`;
+      }).join('')}
     </div>` : '';
 
   body.innerHTML = `
@@ -172,9 +186,8 @@ function drawStep1(body) {
       <h2>Schritt 1: Kriterien den Phasen zuordnen</h2>
       <p class="muted">Bestätigen Sie für jedes Kriterium, ob es online recherchierbar ist
       (Pre-Screening) oder erst im Kundenkontakt bewertbar (Qualifizierung — 2. Screening).
-      Zuordnungen werden sofort im Profil gespeichert. Zu Pre-Screening-Kriterien können Sie
-      einen Suchhinweis erfassen — er wird bei der Recherche mit übertragen, niemals aber
-      Gewichte oder Punktwerte.</p>
+      Zuordnungen werden sofort im Profil gespeichert. Übertragen werden nur
+      Pre-Screening-Kriterien und Ihre Suchauswahl — niemals Gewichte oder Punktwerte.</p>
       ${open.length > 0
         ? `<div class="notice notice-warn">Noch ${open.length} von ${profile.criteria.length} Kriterien unbestätigt.</div>`
         : '<div class="notice notice-ok" style="background:#e7f3ec;border:1px solid #bcd9c8;border-radius:var(--radius);padding:var(--space-2) var(--space-3)">Alle Kriterien bestätigt.</div>'}
@@ -200,11 +213,16 @@ function drawStep1(body) {
         <label for="wf-hints">Globale Hinweise (optional)</label>
         <textarea id="wf-hints" maxlength="1000" placeholder="z. B. Nische, Ausschlüsse, bevorzugte Teilregionen">${esc(params.hints)}</textarea>
       </div>
-      ${allConfirmed && pre.length === 0
-        ? '<div class="notice notice-warn">Kein Kriterium ist als „Pre-Screening" markiert — ohne recherchierbare Kriterien kann Schritt 2 nicht starten.</div>' : ''}
-      <button class="btn btn-primary" data-action="to-step-2" ${allConfirmed && pre.length > 0 ? '' : 'disabled'}>
-        Weiter zu Schritt 2: Screening
-      </button>
+      ${allConfirmed && longlist.length === 0
+        ? '<div class="notice notice-warn">Kein Auswahl-Kriterium im Pre-Screening — die Kandidatensuche braucht Klassen-Filter (z. B. Branche oder Unternehmensgröße aus dem Katalog). Eigene Unternehmen können Sie trotzdem direkt im Tiefen-Screening prüfen.</div>' : ''}
+      <div class="row-actions">
+        <button class="btn btn-primary" data-action="to-step-2" ${allConfirmed && longlist.length > 0 ? '' : 'disabled'}>
+          Weiter zu Schritt 2: Kandidaten finden
+        </button>
+        <button class="btn" data-action="to-step-3" ${allConfirmed && pre.length > 0 ? '' : 'disabled'}>
+          Direkt zu Schritt 3: eigene Unternehmen prüfen
+        </button>
+      </div>
     </div>
   `;
 
@@ -212,7 +230,7 @@ function drawStep1(body) {
     el.addEventListener('change', () => {
       const c = profile.criteria.find((x) => x.id === el.dataset.stage);
       if (!c) return;
-      c.stage = el.value;             // Suchhinweis bleibt beim Phasenwechsel erhalten
+      c.stage = el.value;             // Suchpräferenzen/-hinweise bleiben beim Phasenwechsel erhalten
       confirmed.add(c.id);
       readParams(body);
       store.saveProfile(profile);
@@ -263,13 +281,17 @@ function drawStep1(body) {
     readParams(body);
     goToStep(2);
   });
+  body.querySelector('[data-action="to-step-3"]')?.addEventListener('click', () => {
+    readParams(body);
+    goToStep(3);
+  });
   body.querySelector('[data-action="resume"]')?.addEventListener('click', () => {
     queue = qualificationQueue(profile, store.listLeads(profile.id)).map((l) => l.id);
     position = 0;
     processed = new Set();
     skipped = new Set();
     drafts = new Map();
-    goToStep(3);
+    goToStep(4);
   });
 }
 
@@ -284,17 +306,14 @@ function readParams(body) {
   };
 }
 
-// --- Schritt 2: Online-Screening mit Übernahme (W1/W3) ---
+// --- Schritt 2: Longlist — Kandidaten über Klassen-Filter finden (FR-401) ---
 
 function maskKey(key) {
   return key.length > 12 ? `${key.slice(0, 7)}…${key.slice(-4)}` : '…';
 }
 
-function drawStep2(body) {
-  const pre = prescreeningCriteria(profile);
-  const apiKey = store.getApiKey();
-
-  const keyBlock = apiKey
+function keyBlockHtml(apiKey) {
+  return apiKey
     ? `<p>Hinterlegter Schlüssel: <code>${esc(maskKey(apiKey))}</code>
          <button class="btn btn-small" data-action="clear-key">Schlüssel löschen</button></p>`
     : `<div class="inline-fields">
@@ -307,27 +326,38 @@ function drawStep2(body) {
        <div class="hint">Der Schlüssel wird ausschließlich lokal in diesem Browser gespeichert und nur an
        api.anthropic.com gesendet — nie in Exporten. Nur auf vertrauenswürdigen Geräten hinterlegen.
        Schlüssel erhalten Sie unter platform.claude.com.</div>`;
+}
 
-  const hinted = pre.filter((c) => (c.searchHint || '').trim());
+function drawStep2(body) {
+  const longlist = longlistCriteria(profile);
+  const apiKey = store.getApiKey();
+  const [costLo, costHi] = COST_ESTIMATES.longlist;
+
+  const filters = longlist
+    .filter((c) => (c.searchTargets || []).length > 0)
+    .map((c) => `${esc(c.name)}: ${c.rules.options.filter((o) => c.searchTargets.includes(o.id)).map((o) => esc(o.label)).join(', ')}`);
+
   body.innerHTML = `
     <div class="card">
-      <h2>Schritt 2: Online-Screening</h2>
-      <p>Recherchiert wird in <strong>${esc(params.region)}</strong> nach
-      <strong>${esc(String(params.count))}</strong> Kandidaten anhand der
-      <strong>${pre.length} Pre-Screening-Kriterien</strong>:
-      ${pre.map((c) => `<span class="badge">${esc(c.name)}</span>`).join(' ')}</p>
-      ${hinted.length > 0 ? `<p class="muted">Suchhinweise: ${hinted.map((c) => `${esc(c.name)}: „${esc(c.searchHint.trim())}"`).join(' · ')}</p>` : ''}
-      <p class="muted">Qualifizierungskriterien werden nicht übertragen und bleiben für Schritt 3 offen.</p>
+      <h2>Schritt 2: Kandidaten finden (Longlist)</h2>
+      <p>Gesucht werden <strong>${esc(String(params.count))}</strong> Kandidaten in
+      <strong>${esc(params.region)}</strong> über die Klassen-Filter:
+      ${longlist.map((c) => `<span class="badge">${esc(c.name)}</span>`).join(' ')}</p>
+      ${filters.length > 0
+        ? `<p class="muted">Harte Filter: ${filters.join(' · ')}</p>`
+        : '<p class="muted">Keine Suchauswahl angeklickt — es wird ohne harte Filter gesucht.</p>'}
+      <p class="muted">Die übrigen Pre-Screening-Kriterien (Signale, Skalen, Zahlen) werden erst im
+      Tiefen-Screening (Schritt 3) je Unternehmen recherchiert.</p>
       <div class="card">
         <h2>API-Schlüssel</h2>
-        ${keyBlock}
+        ${keyBlockHtml(apiKey)}
       </div>
-      <div class="notice notice-warn">Der Lauf nutzt Ihren eigenen API-Schlüssel und verursacht Kosten
-      (Websuche + KI-Nutzung; erfahrungsgemäß grob 0,50–1,50&nbsp;€ pro Lauf mit 20 Kandidaten).</div>
+      <div class="notice notice-warn">Der Lauf nutzt Ihren eigenen API-Schlüssel; Kosten grob
+      ${String(costLo).replace('.', ',')}–${String(costHi).replace('.', ',')}&nbsp;€.</div>
       <div class="row-actions">
         <button class="btn" data-action="back-1" ${running ? 'disabled' : ''}>Zurück zu Schritt 1</button>
-        <button class="btn btn-primary" data-action="start" ${(!apiKey || pre.length === 0 || running) ? 'disabled' : ''}>
-          Screening starten
+        <button class="btn btn-primary" data-action="start" ${(!apiKey || longlist.length === 0 || running) ? 'disabled' : ''}>
+          Longlist-Suche starten
         </button>
         <span id="wf-status" class="muted"></span>
       </div>
@@ -338,7 +368,7 @@ function drawStep2(body) {
   body.querySelectorAll('[data-action]').forEach((el) => {
     el.addEventListener('click', () => handleStep2Action(el.dataset.action, body));
   });
-  if (result) drawResults(body);
+  if (result) drawLonglistResults(body);
 }
 
 function setStatus(text) {
@@ -364,13 +394,13 @@ async function handleStep2Action(action, body) {
     }
     return;
   }
-  if (action === 'start') startRun(body);
+  if (action === 'start') startLonglist(body);
 }
 
-async function startRun(body) {
+async function startLonglist(body) {
   let request;
   try {
-    request = buildScreeningRequest(profile, params);
+    request = buildLonglistRequest(profile, params);
   } catch (e) {
     toast(e.message);
     return;
@@ -389,9 +419,9 @@ async function startRun(body) {
     setStatus('');
     if (parsed.candidates.length === 0) {
       body.querySelector('#wf-results').innerHTML =
-        '<div class="notice notice-warn">Die Recherche lieferte keine belegbaren Kandidaten. Versuchen Sie eine breitere Region oder weniger strenge Hinweise.</div>';
+        '<div class="notice notice-warn">Die Suche lieferte keine belegbaren Kandidaten. Versuchen Sie eine breitere Region oder weniger harte Filter.</div>';
     } else {
-      drawResults(body);
+      drawLonglistResults(body);
     }
   } catch (e) {
     setStatus('');
@@ -414,24 +444,24 @@ function shortUrl(url) {
   }
 }
 
-function drawResults(body) {
+function drawLonglistResults(body) {
   const target = body.querySelector('#wf-results');
   if (!target || !result) return;
 
   const existingNames = new Set(store.listLeads(profile.id).map((l) => l.name.trim().toLowerCase()));
-  const preCount = prescreeningCriteria(profile).length;
+  const longlist = longlistCriteria(profile);
 
   const rows = result.candidates.map((cand, i) => {
-    const ev = evaluate(profile, candidateToLead(cand, profile));
-    const filled = Object.keys(cand.values).length;
     const dup = existingNames.has(cand.name.trim().toLowerCase());
+    const classValues = longlist.map((c) => {
+      const v = cand.values[c.id];
+      const label = v === undefined ? '–' : (c.rules.options.find((o) => o.id === v)?.label ?? '–');
+      return `${esc(c.name)}: <strong>${esc(label)}</strong>`;
+    }).join(' · ');
     const sources = [...cand.sources, ...Object.values(cand.valueSources)]
       .filter((v, idx, arr) => arr.indexOf(v) === idx)
       .map((s) => `<a href="${esc(s)}" target="_blank" rel="noopener noreferrer">${esc(shortUrl(s))}</a>`)
       .join(' · ');
-    const unmatchedNote = cand.unmatched.length > 0
-      ? `<div class="hint">Nicht zuordenbar: ${cand.unmatched.map((u) => `${esc(u.criterionName)} = „${esc(u.raw)}"`).join('; ')}</div>`
-      : '';
     return `
       <tr>
         <td><input type="checkbox" data-select="${i}" ${result.selected.has(i) ? 'checked' : ''} aria-label="Kandidat auswählen"></td>
@@ -440,13 +470,9 @@ function drawResults(body) {
           ${dup ? '<span class="badge badge-incomplete">evtl. Duplikat</span>' : ''}
           ${cand.website ? `<div><a href="${esc(cand.website)}" target="_blank" rel="noopener noreferrer">${esc(shortUrl(cand.website))}</a></div>` : ''}
           <div class="muted">${esc(cand.reasoning)}</div>
-          ${unmatchedNote}
+          <div class="hint">${classValues}</div>
           <div class="hint">Quellen: ${sources}</div>
         </td>
-        <td class="right">${ev.total === null ? '–' : fmtScore(ev.total)}</td>
-        <td>${ev.status === 'scored' ? tierBadge(profile, ev.tierId) : ''}
-            ${ev.status === 'not-evaluable' ? '<span class="badge badge-not-evaluable">Nicht bewertbar</span>' : ''}</td>
-        <td class="right">${filled}/${preCount}</td>
       </tr>`;
   }).join('');
 
@@ -455,15 +481,16 @@ function drawResults(body) {
       <h2>Kandidaten (${result.candidates.length})</h2>
       ${result.warnings.length > 0 ? `
         <div class="notice notice-warn"><ul>${result.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>` : ''}
-      <p class="muted">Punktzahlen beruhen nur auf den recherchierten Pre-Screening-Werten.
-      Die Qualifizierung folgt in Schritt 3. Ohne Übernahme wird nichts gespeichert.</p>
+      <p class="muted">Die Longlist zeigt nur die Klassen-Filter. Das granulare Bild (Signale,
+      Konfidenz, Belegdatum) entsteht im Tiefen-Screening. Ohne Übernahme wird nichts gespeichert.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th></th><th>Kandidat</th><th class="right">Punktzahl</th><th>Stufe</th><th class="right">Belegt</th></tr></thead>
+        <thead><tr><th></th><th>Kandidat</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
       <div class="row-actions" style="margin-top: var(--space-3)">
         <button class="btn" data-result-action="toggle-all">Alle an/abwählen</button>
-        <button class="btn btn-primary" data-result-action="import">Auswahl übernehmen &amp; weiter zu Schritt 3</button>
+        <button class="btn btn-primary" data-result-action="deep">Tiefen-Screening für Auswahl</button>
+        <button class="btn" data-result-action="import">Auswahl ohne Tiefen-Screening übernehmen</button>
       </div>
     </div>
   `;
@@ -476,40 +503,328 @@ function drawResults(body) {
     });
   });
   target.querySelectorAll('[data-result-action]').forEach((btn) => {
-    btn.addEventListener('click', () => handleResultAction(btn.dataset.resultAction, body));
+    btn.addEventListener('click', () => handleLonglistAction(btn.dataset.resultAction, body));
   });
 }
 
-function handleResultAction(action, body) {
+function importCandidates(candidates) {
+  const today = new Date().toISOString().slice(0, 10);
+  const importedIds = [];
+  for (const cand of candidates) {
+    const lead = candidateToLead(cand, profile, { region: params.region, date: today });
+    store.saveLead(lead);
+    importedIds.push(lead.id);
+  }
+  toast(`${importedIds.length} Lead(s) übernommen — Quelle „Screening".`);
+  queue = importedIds;
+  position = 0;
+  processed = new Set();
+  skipped = new Set();
+  drafts = new Map();
+  goToStep(4);
+}
+
+function handleLonglistAction(action, body) {
   if (action === 'toggle-all') {
     if (result.selected.size === result.candidates.length) result.selected.clear();
     else result.candidates.forEach((_, i) => result.selected.add(i));
-    drawResults(body);
+    drawLonglistResults(body);
     return;
   }
+  const chosen = [...result.selected].sort((a, b) => a - b).map((i) => result.candidates[i]);
+  if (chosen.length === 0) { toast('Bitte mindestens einen Kandidaten auswählen.'); return; }
   if (action === 'import') {
-    if (result.selected.size === 0) { toast('Bitte mindestens einen Kandidaten auswählen.'); return; }
-    const today = new Date().toISOString().slice(0, 10);
-    const importedIds = [];
-    for (const i of [...result.selected].sort((a, b) => a - b)) {
-      const lead = candidateToLead(result.candidates[i], profile, { region: result.region, date: today });
-      store.saveLead(lead);
-      importedIds.push(lead.id);
-    }
-    toast(`${importedIds.length} Lead(s) übernommen — Quelle „Screening".`);
     result = null;
-    queue = importedIds;                          // W3: genau die übernommenen Leads
-    position = 0;
-    processed = new Set();
-    skipped = new Set();
-    drafts = new Map();
+    importCandidates(chosen);
+    return;
+  }
+  if (action === 'deep') {
+    // Tiefen-Screening nur für Kandidaten des laufenden Laufs (Verfassung III)
+    deepRun = deepRun?.running ? deepRun : { entries: [], running: false, controller: null };
+    for (const cand of chosen) {
+      if (deepRun.entries.some((e) => e.name.trim().toLowerCase() === cand.name.trim().toLowerCase())) continue;
+      deepRun.entries.push({
+        name: cand.name, website: cand.website, longlistCandidate: cand,
+        status: 'pending', candidate: null, error: '', warnings: [], selected: true,
+      });
+    }
     goToStep(3);
   }
 }
 
-// --- Schritt 3: Geführte Qualifizierung Lead für Lead (W4) ---
+// --- Schritt 3: Tiefen-Screening je Unternehmen (FR-402–406) ---
 
 function drawStep3(body) {
+  if (!deepRun) deepRun = { entries: [], running: false, controller: null };
+  const apiKey = store.getApiKey();
+  const pre = prescreeningCriteria(profile);
+
+  body.innerHTML = `
+    <div class="card">
+      <h2>Schritt 3: Tiefen-Screening</h2>
+      <p class="muted">Je Unternehmen läuft eine eigene Recherche über alle
+      ${pre.length} Pre-Screening-Kriterien — mit Quelle, Konfidenz (belegt/abgeleitet)
+      und Belegdatum je Wert. Werte ohne Quelle werden verworfen.</p>
+      ${apiKey ? '' : `<div class="card"><h2>API-Schlüssel</h2>${keyBlockHtml(null)}</div>`}
+      <div class="inline-fields">
+        <div class="field grow">
+          <label for="deep-name">Eigenes Unternehmen prüfen — Name</label>
+          <input type="text" id="deep-name" maxlength="120" placeholder="z. B. Muster GmbH">
+        </div>
+        <div class="field grow">
+          <label for="deep-website">Website (optional)</label>
+          <input type="text" id="deep-website" maxlength="200" placeholder="https://…">
+        </div>
+        <button class="btn" data-action="add-manual">Hinzufügen</button>
+      </div>
+      <div id="deep-controls"></div>
+      <div id="deep-entries"></div>
+    </div>
+    <div id="deep-results"></div>
+  `;
+
+  body.querySelector('[data-action="add-manual"]').addEventListener('click', () => {
+    const name = body.querySelector('#deep-name').value.trim();
+    const website = body.querySelector('#deep-website').value.trim() || null;
+    if (!name) { toast('Bitte einen Firmennamen eingeben.'); return; }
+    if (deepRun.entries.some((e) => e.name.trim().toLowerCase() === name.toLowerCase())) {
+      toast('Dieses Unternehmen steht bereits in der Liste.');
+      return;
+    }
+    deepRun.entries.push({
+      name, website, longlistCandidate: null,
+      status: 'pending', candidate: null, error: '', warnings: [], selected: true,
+    });
+    body.querySelector('#deep-name').value = '';
+    body.querySelector('#deep-website').value = '';
+    renderDeepControls(body);
+    renderDeepEntries(body);
+  });
+  body.querySelectorAll('[data-action="save-key"], [data-action="clear-key"]').forEach((el) => {
+    el.addEventListener('click', () => handleStep2Action(el.dataset.action, body));
+  });
+
+  renderDeepControls(body);
+  renderDeepEntries(body);
+  renderDeepResults(body);
+}
+
+function renderDeepControls(body) {
+  const target = body.querySelector('#deep-controls');
+  if (!target) return;
+  const pending = deepRun.entries.filter((e) => e.status === 'pending').length;
+  const total = deepRun.entries.length;
+  const cost = estimateDeepCost(pending);
+  const apiKey = store.getApiKey();
+  const fmtEur = (v) => String(v.toFixed(2)).replace('.', ',');
+
+  target.innerHTML = `
+    ${total > 15 ? '<div class="notice notice-warn">Mehr als 15 Unternehmen — das dauert lange und kostet entsprechend. Empfehlung: 5–10 je Lauf.</div>' : ''}
+    ${pending > 0 ? `<p class="muted">Noch ${pending} Unternehmen offen — geschätzt
+      ${fmtEur(cost.min)}–${fmtEur(cost.max)}&nbsp;€ und ca. ${pending * 2}–${pending * 3} Minuten
+      (sequenziell, abbrechbar; Teilergebnisse bleiben erhalten).</p>` : ''}
+    <div class="row-actions">
+      <button class="btn" data-deep="back" ${deepRun.running ? 'disabled' : ''}>Zurück zu Schritt 2</button>
+      ${deepRun.running
+        ? '<button class="btn" data-deep="abort">Abbrechen</button>'
+        : `<button class="btn btn-primary" data-deep="start" ${(!apiKey || pending === 0) ? 'disabled' : ''}>
+             ${deepRun.entries.some((e) => e.status === 'done' || e.status === 'error') ? 'Fortsetzen' : 'Tiefen-Screening starten'}
+           </button>`}
+      <span id="deep-status" class="muted"></span>
+    </div>
+  `;
+  target.querySelectorAll('[data-deep]').forEach((el) => {
+    el.addEventListener('click', () => {
+      if (el.dataset.deep === 'back') { goToStep(2); return; }
+      if (el.dataset.deep === 'abort') {
+        deepRun.running = false;
+        deepRun.controller?.abort();
+        return;
+      }
+      if (el.dataset.deep === 'start') runDeepLoop(body);
+    });
+  });
+}
+
+const DEEP_STATUS_LABELS = {
+  pending: 'wartet',
+  running: 'läuft …',
+  done: 'fertig',
+  error: 'Fehler',
+};
+
+function renderDeepEntries(body) {
+  const target = body.querySelector('#deep-entries');
+  if (!target) return;
+  if (deepRun.entries.length === 0) {
+    target.innerHTML = '<div class="empty-state">Keine Unternehmen in der Liste — wählen Sie Kandidaten in Schritt 2 aus oder fügen Sie oben ein eigenes Unternehmen hinzu.</div>';
+    return;
+  }
+  target.innerHTML = `
+    <ul class="deep-list">
+      ${deepRun.entries.map((e, i) => `
+        <li class="deep-entry deep-${e.status}">
+          <span class="deep-status">${DEEP_STATUS_LABELS[e.status]}</span>
+          <strong>${esc(e.name)}</strong>
+          ${e.website ? `<span class="muted">${esc(shortUrl(e.website))}</span>` : ''}
+          ${e.status === 'error' ? `<span class="muted">${esc(e.error)}</span>
+            <button class="btn btn-small" data-retry="${i}">Erneut versuchen</button>` : ''}
+          ${e.status === 'pending' && !deepRun.running ? `<button class="btn btn-small" data-remove="${i}">Entfernen</button>` : ''}
+        </li>`).join('')}
+    </ul>
+  `;
+  target.querySelectorAll('[data-retry]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const entry = deepRun.entries[Number(el.dataset.retry)];
+      if (entry) { entry.status = 'pending'; entry.error = ''; }
+      renderDeepControls(body);
+      renderDeepEntries(body);
+    });
+  });
+  target.querySelectorAll('[data-remove]').forEach((el) => {
+    el.addEventListener('click', () => {
+      deepRun.entries.splice(Number(el.dataset.remove), 1);
+      renderDeepControls(body);
+      renderDeepEntries(body);
+    });
+  });
+}
+
+async function runDeepLoop(body) {
+  if (deepRun.running) return;
+  deepRun.running = true;
+  renderDeepControls(body);
+
+  while (deepRun.running) {
+    const entry = deepRun.entries.find((e) => e.status === 'pending');
+    if (!entry) break;
+    entry.status = 'running';
+    renderDeepEntries(body);
+    const idx = deepRun.entries.indexOf(entry) + 1;
+    const statusEl = body.querySelector('#deep-status');
+    if (statusEl) statusEl.textContent = `Unternehmen ${idx} von ${deepRun.entries.length}: ${entry.name} …`;
+
+    let request;
+    try {
+      request = buildDeepScreeningRequest(profile, entry, { region: params.region });
+    } catch (e) {
+      entry.status = 'error';
+      entry.error = e.message;
+      renderDeepEntries(body);
+      continue;
+    }
+
+    deepRun.controller = new AbortController();
+    try {
+      const { output } = await runScreening(store.getApiKey(), request, () => {}, { signal: deepRun.controller.signal });
+      const { candidate, warnings } = parseDeepResult(output, profile, { name: entry.name });
+      entry.warnings = warnings;
+      if (candidate) {
+        entry.candidate = entry.longlistCandidate
+          ? mergeDeepIntoCandidate(entry.longlistCandidate, candidate)
+          : candidate;
+        entry.status = 'done';
+      } else {
+        entry.status = 'error';
+        entry.error = warnings.join(' ');
+      }
+    } catch (e) {
+      if (e.aborted) {
+        entry.status = 'pending';               // zurück in die Warteschlange (Teilergebnisse bleiben)
+        break;
+      }
+      entry.status = 'error';
+      entry.error = e.message;
+      if (e.message.includes('Rate-Limit')) {   // 429: Lauf pausieren, kein Auto-Retry (Kosten)
+        deepRun.running = false;
+      }
+    }
+    renderDeepEntries(body);
+    renderDeepResults(body);
+  }
+
+  deepRun.running = false;
+  deepRun.controller = null;
+  const statusEl = body.querySelector('#deep-status');
+  if (statusEl) statusEl.textContent = '';
+  renderDeepControls(body);
+  renderDeepEntries(body);
+  renderDeepResults(body);
+}
+
+function confidenceBadge(conf) {
+  if (conf === 'direct') return '<span class="badge badge-confidence-direct">belegt</span>';
+  if (conf === 'inferred') return '<span class="badge badge-confidence-inferred">abgeleitet</span>';
+  return '';
+}
+
+function renderDeepResults(body) {
+  const target = body.querySelector('#deep-results');
+  if (!target) return;
+  const done = deepRun.entries.filter((e) => e.status === 'done');
+  if (done.length === 0) { target.innerHTML = ''; return; }
+
+  const pre = prescreeningCriteria(profile);
+  const cards = done.map((entry) => {
+    const cand = entry.candidate;
+    const ev = evaluate(profile, candidateToLead(cand, profile));
+    const rows = pre.map((c) => {
+      const v = cand.values[c.id];
+      let label;
+      if (v === undefined) label = '<span class="muted">offen</span>';
+      else if (c.type === 'select') label = esc(c.rules.options.find((o) => o.id === v)?.label ?? String(v));
+      else label = esc(fmtValue(v));
+      const src = cand.valueSources[c.id]
+        ? ` <a href="${esc(cand.valueSources[c.id])}" target="_blank" rel="noopener noreferrer">[Quelle]</a>` : '';
+      const date = cand.evidenceDates?.[c.id] ? ` <span class="muted">Stand ${esc(cand.evidenceDates[c.id])}</span>` : '';
+      return `<tr><td>${esc(c.name)}</td><td>${label} ${confidenceBadge(cand.confidence?.[c.id])}${date}${src}</td></tr>`;
+    }).join('');
+    const i = deepRun.entries.indexOf(entry);
+    return `
+      <div class="card">
+        <div class="criterion-head">
+          <label style="display:flex;align-items:center;gap:var(--space-2)">
+            <input type="checkbox" data-deep-select="${i}" ${entry.selected ? 'checked' : ''}>
+            <strong>${esc(cand.name)}</strong>
+          </label>
+          ${cand.website ? `<a href="${esc(cand.website)}" target="_blank" rel="noopener noreferrer">${esc(shortUrl(cand.website))}</a>` : ''}
+          <span>Vorläufig: ${ev.total === null ? '–' : fmtScore(ev.total)} ${ev.status === 'scored' ? tierBadge(profile, ev.tierId) : ''}
+            ${ev.status === 'not-evaluable' ? '<span class="badge badge-not-evaluable">Nicht bewertbar</span>' : ''}</span>
+        </div>
+        ${cand.reasoning ? `<p class="muted">${esc(cand.reasoning)}</p>` : ''}
+        ${entry.warnings.length > 0 ? `<div class="hint">${entry.warnings.map((w) => esc(w)).join(' · ')}</div>` : ''}
+        <div class="table-wrap"><table><tbody>${rows}</tbody></table></div>
+      </div>`;
+  }).join('');
+
+  target.innerHTML = `
+    <h2>Geprüfte Unternehmen (${done.length})</h2>
+    <p class="muted">Ohne Übernahme wird nichts gespeichert. Die Qualifizierung (Schritt 4)
+    ergänzt danach die nicht recherchierbaren Kriterien.</p>
+    ${cards}
+    <div class="row-actions" style="margin-bottom: var(--space-4)">
+      <button class="btn btn-primary" data-deep-import>Auswahl übernehmen &amp; weiter zu Schritt 4</button>
+    </div>
+  `;
+
+  target.querySelectorAll('[data-deep-select]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const entry = deepRun.entries[Number(cb.dataset.deepSelect)];
+      if (entry) entry.selected = cb.checked;
+    });
+  });
+  target.querySelector('[data-deep-import]').addEventListener('click', () => {
+    const chosen = deepRun.entries.filter((e) => e.status === 'done' && e.selected).map((e) => e.candidate);
+    if (chosen.length === 0) { toast('Bitte mindestens ein Unternehmen auswählen.'); return; }
+    deepRun = null;
+    result = null;
+    importCandidates(chosen);
+  });
+}
+
+// --- Schritt 4: Geführte Qualifizierung Lead für Lead (W4, unverändert aus 003) ---
+
+function drawStep4(body) {
   if (queue.length === 0 || finished || position >= queue.length) {
     drawSummary(body);
     return;
@@ -518,9 +833,8 @@ function drawStep3(body) {
   const leadId = queue[position];
   const stored = store.getLead(profile.id, leadId);
   if (!stored) {
-    // Lead wurde außerhalb gelöscht — überspringen
     position += 1;
-    drawStep3(body);
+    drawStep4(body);
     return;
   }
   const working = drafts.get(leadId) || structuredClone(stored);
@@ -536,7 +850,8 @@ function drawStep3(body) {
       : fmtValue(value);
     const source = working.sources?.[c.id]
       ? ` <a href="${esc(working.sources[c.id])}" target="_blank" rel="noopener noreferrer">[Quelle]</a>` : '';
-    return `<tr><td>${esc(c.name)}</td><td>${value === undefined ? '<span class="muted">— nicht belegt —</span>' : esc(label)}${source}</td></tr>`;
+    const date = working.evidenceDates?.[c.id] ? ` <span class="muted">Stand ${esc(working.evidenceDates[c.id])}</span>` : '';
+    return `<tr><td>${esc(c.name)}</td><td>${value === undefined ? '<span class="muted">— nicht belegt —</span>' : esc(label)} ${confidenceBadge(working.confidence?.[c.id])}${date}${source}</td></tr>`;
   }).join('');
 
   const qualFields = qual.map((c) => {
@@ -574,7 +889,7 @@ function drawStep3(body) {
 
   body.innerHTML = `
     <div class="card">
-      <h2>Schritt 3: Qualifizierung — Lead ${position + 1} von ${queue.length}</h2>
+      <h2>Schritt 4: Qualifizierung — Lead ${position + 1} von ${queue.length}</h2>
       <p><strong>${esc(working.name)}</strong>
         ${working.website ? ` · <a href="${esc(working.website)}" target="_blank" rel="noopener noreferrer">${esc(shortUrl(working.website))}</a>` : ''}</p>
       ${working.note ? `<details><summary class="muted">Notiz &amp; Recherche-Begründung</summary><p class="muted" style="white-space:pre-line">${esc(working.note)}</p></details>` : ''}
@@ -601,14 +916,14 @@ function drawStep3(body) {
   `;
 
   body.querySelectorAll('[data-criterion]').forEach((el) => {
-    const apply = () => { readLeadValue(el, working); updateStep3Score(body, working); };
+    const apply = () => { readLeadValue(el, working); updateStep4Score(body, working); };
     el.addEventListener('change', apply);
     if (el.type === 'number') el.addEventListener('input', apply);
   });
   body.querySelectorAll('[data-action]').forEach((btn) => {
-    btn.addEventListener('click', () => handleStep3Action(btn.dataset.action, body, working));
+    btn.addEventListener('click', () => handleStep4Action(btn.dataset.action, body, working));
   });
-  updateStep3Score(body, working);
+  updateStep4Score(body, working);
 }
 
 function readLeadValue(el, working) {
@@ -625,7 +940,7 @@ function readLeadValue(el, working) {
   }
 }
 
-function updateStep3Score(body, working) {
+function updateStep4Score(body, working) {
   const panel = body.querySelector('#wf-score');
   if (!panel) return;
   const ev = evaluate(profile, working);
@@ -644,9 +959,9 @@ function updateStep3Score(body, working) {
   `;
 }
 
-function handleStep3Action(action, body, working) {
+function handleStep4Action(action, body, working) {
   if (action === 'prev') {
-    if (position > 0) { position -= 1; drawStep3(body); }
+    if (position > 0) { position -= 1; drawStep4(body); }
     return;
   }
   if (action === 'skip') {
@@ -667,16 +982,16 @@ function handleStep3Action(action, body, working) {
 function advance(body) {
   position += 1;
   if (position >= queue.length) finished = true;
-  drawStep3(body);
+  drawStep4(body);
 }
 
 function drawSummary(body) {
   if (queue.length === 0) {
     body.innerHTML = `
       <div class="card">
-        <h2>Schritt 3: Qualifizierung</h2>
+        <h2>Schritt 4: Qualifizierung</h2>
         <div class="empty-state">Keine Leads in der Warteschlange. Übernehmen Sie in
-        Schritt 2 Kandidaten oder starten Sie den Workflow neu.</div>
+        Schritt 2 oder 3 Unternehmen oder starten Sie den Workflow neu.</div>
         <button class="btn" data-action="restart">Zurück zu Schritt 1</button>
       </div>`;
     body.querySelector('[data-action="restart"]').addEventListener('click', () => { render(container); });
