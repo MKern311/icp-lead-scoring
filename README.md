@@ -1,77 +1,59 @@
 # ICP Lead Scoring
 
-Generisches Werkzeug, um ein **Ideal Customer Profile (ICP)** zu definieren und Leads
-dagegen nachvollziehbar zu bewerten — als statische Web-App ohne Backend.
-Alle Daten bleiben lokal im Browser; es gibt kein Konto und keine Telemetrie.
+Ideal Customer Profile definieren und Leads nachvollziehbar bewerten.
+Statische Web-App ohne Backend — **alle Daten bleiben im Browser**.
 
-## Funktionen
+**Live:** https://mkern311.github.io/icp-lead-scoring/
 
-- **ICP-Profile frei definieren**: eigene Kriterien (Auswahlliste, Zahlenbereich, Ja/Nein,
-  Skala) mit Gewichtung, Punktregeln und K.o.-Kriterien; Bewertungsstufen (z. B. A/B/C)
-  mit eigenen Schwellenwerten
-- **Leads bewerten**: einzeln mit Live-Ergebnis oder massenhaft per CSV-Import mit
-  Spaltenzuordnung; jede Punktzahl ist bis auf Kriterienebene aufgeschlüsselt
-- **Rangliste**: sortieren, filtern, als Excel-taugliche CSV exportieren (Semikolon, UTF-8-BOM)
-- **Zweistufiges Screening**: Kriterien sind einer Phase zugeordnet — **Pre-Screening**
-  (firmografisch, online recherchierbar) oder **Qualifizierung** (2. Screening, manuell
-  im Kundenkontakt); Pre-Screening-Kriterien können einen **Suchhinweis** tragen
-  (z. B. „bevorzugt 50–250 Mitarbeiter"), der die Online-Recherche lenkt
-- **Geführter Screening-Workflow (vierstufig)**: Der Nav-Punkt „Screening" führt durch
-  (1) **Kriterien** — Phasen-Zuordnung mit Pflicht-Bestätigung, anklickbaren
-  Suchpräferenzen (statt Freitext) und einem kategorisierten **Kriterien-Katalog**
-  online recherchierbarer Kriterienarten; die Klassen folgen EU-Standards, wo es sie
-  gibt (Branche nach NACE Rev. 2, Mitarbeiter- und Umsatzklassen nach der
-  EU-KMU-Definition 2003/361/EG). Wachstumssignale sind fünf konkrete Einzelkriterien
-  mit Belegzeitraum 12 Monate (Expansion/Investition, Stellenanzeigen mit frei
-  benennbaren Rollen/Stellentiteln, Führungswechsel, Übernahme/Fusion,
-  Auszeichnung/Zertifizierung),
-  (2) **Kandidaten finden** — günstige Longlist-Suche über die Klassen-Filter,
-  (3) **Tiefen-Screening** — je Unternehmen ein eigener Recherche-Lauf über alle
-  Pre-Screening-Kriterien mit Quelle, **Konfidenz** (belegt/abgeleitet) und
-  **Belegdatum** je Wert; sequenziell, abbrechbar, fortsetzbar; auch für manuell
-  eingegebene Firmen, (4) **Qualifizierung** Lead für Lead mit Live-Bewertung;
-  offene Screening-Leads werden beim Wiedereinstieg direkt angeboten
-- **Online-Recherche** *(optional, Schritte 2–3)*: Mit eigenem Anthropic-API-Schlüssel
-  per KI-Websuche, inkl. Quellen-URLs je Angabe; Werte ohne Quelle werden verworfen.
-  Der Schlüssel bleibt lokal; übertragen werden nur Pre-Screening-Kriterien samt
-  Suchauswahl, nie Gewichte, Leads oder Bewertungen. Kosten grob: Longlist 0,30–0,80 €,
-  Tiefen-Screening 0,15–0,35 € je Unternehmen (eigener Schlüssel).
-- **Generik**: Profile als JSON-Datei exportieren/importieren — andere Nutzer erhalten
-  identische Bewertungslogik; zwei anpassbare Beispiel-Vorlagen sind enthalten
-- **Offline-Kern**: Alle Kernfunktionen nach dem ersten Laden auch ohne Internetverbindung
-  nutzbar (Service Worker); nur das Online-Screening braucht Netz und Schlüssel
+## Was es tut
 
-## Nutzung
+1. **Wunschkunden-Profil definieren** — Kriterien festlegen, gewichten,
+   K.-o.-Kriterien markieren, Stufen (A/B/C) bestimmen. Zwei Vorlagen als Startpunkt.
+2. **Kandidaten finden** — optionale Online-Recherche sucht Unternehmen, die zu den
+   Klassen-Filtern passen (Branche, Größe, Region), jeweils mit Quellenangabe.
+3. **Tiefen-Screening** — jedes Unternehmen einzeln geprüft: belegter Wert, Quelle,
+   Konfidenz (belegt/abgeleitet) und Belegdatum je Kriterium. Werte ohne Quelle
+   werden verworfen.
+4. **Qualifizieren** — was erst im Gespräch zu erfahren ist, wird geführt Lead für
+   Lead ergänzt. Die Rangliste sortiert nach Punktzahl.
 
-Die App ist eine statische Site — den Ordner `docs/` beliebig hosten (z. B. GitHub Pages)
-oder lokal starten:
+Punkte entstehen ausschließlich lokal aus den eigenen Regeln — die Recherche liefert
+nur Rohwerte mit Quellen, nie Bewertungen.
+
+## Datenhaltung
+
+Profile, Leads und Einstellungen liegen im `localStorage` des jeweiligen Browsers
+(Namensraum `icp.v1.*`). Kein Konto, kein Server, keine Übertragung — mit einer eng
+begrenzten Ausnahme: Wer die Online-Recherche nutzt, sendet die Pre-Screening-Kriterien
+und Suchparameter an die Anthropic-API. Gewichte, Punktwerte, Bewertungen und
+gespeicherte Leads werden dabei nie übertragen.
+
+Der API-Schlüssel ist der eigene und wird nur im Browser gespeichert (nie in Exporten).
+
+## Lokal starten
 
 ```bash
-python3 -m http.server 8080 --directory docs
-# → http://localhost:8080
+node serve.mjs                  # http://localhost:8080
+node --test tests/*.test.js     # Kernlogik-Tests
 ```
 
-## Tests
+Node ≥ 20. Keine Abhängigkeiten, kein Build-Schritt.
 
-Die gesamte Kernlogik (Scoring, Modell-Validierung, CSV, Profil-Export/-Import) ist
-testgedeckt — ohne Abhängigkeiten, nur mit dem Node-Test-Runner (Node ≥ 20):
+Wer den API-Schlüssel nicht bei jedem Start eingeben will, legt ihn lokal ab:
 
 ```bash
-node --test tests/*.test.js
+cp .env.example .env            # ANTHROPIC_API_KEY eintragen
 ```
 
-## Projektstruktur
+`.env` ist von Git ausgeschlossen und wird nur vom lokalen Server gelesen. Auf
+GitHub Pages gibt es keinen Server — dort wird der Schlüssel im Browser hinterlegt.
 
-```text
-docs/            Web-App (deploybarer Pages-Root)
-  js/core/       Pure, DOM-freie Logik: scoring, model, csv, profile-io
-  js/ui/         Views (deutsch): Profile, Editor, Lead, Rangliste, Import
-tests/           node --test
-specs/           Spec-Kit-Artefakte: Spezifikation, Plan, Contracts, Tasks
-.specify/        Spec-Kit-Konfiguration inkl. Projekt-Verfassung
-```
+## Aufbau
 
-Verbindliche Regeln (Generik, nachvollziehbare Scores, lokale Datenhoheit, Einfachheit,
-testbare Scoring-Logik): [.specify/memory/constitution.md](.specify/memory/constitution.md).
-Die Rechenregeln der Bewertung sind in
-[specs/001-icp-lead-scoring/contracts/scoring-engine.md](specs/001-icp-lead-scoring/contracts/scoring-engine.md) fixiert.
+- `docs/` — die App (zugleich GitHub-Pages-Root, deploybar wie sie ist)
+- `docs/js/core/` — pure, DOM-freie Logik (Scoring, Screening, CSV, Import/Export)
+- `tests/` — Tests der Kernlogik (`node --test`)
+- `specs/` — Spezifikationen und verbindliche Verträge je Feature
+- `.specify/memory/constitution.md` — die Grundsätze des Projekts
+
+Vanilla JavaScript (ES2022), HTML5, CSS3. Kein Framework, keine Abhängigkeiten.

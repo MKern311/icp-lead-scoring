@@ -147,7 +147,7 @@ identische Scores; Vorlage laden, anpassen, Original bleibt unberührt.
 - [X] T030 [P] Performance-Nachweis: synthetisches 5 000-Leads-Fixture in `tests/scoring.test.js` — `evaluateAll` + Sortierung < 1 s (Plan-Performance-Ziel, Spec-Annahme Datenvolumen)
 - [X] T031 [P] `README.md` im Repo-Root: Kurzbeschreibung, Nutzung (URL), lokaler Start, Tests, Verweis auf specs/ und Constitution
 - [ ] T032 Manuelle End-to-End-Validierung aller Quickstart-Szenarien V1–V5 durchführen und Ergebnis (bestanden/Abweichungen) in specs/001-icp-lead-scoring/quickstart.md als Abschnitt „Validierungsprotokoll" dokumentieren
-- [ ] T033 Deployment auf GitHub Pages gemäß quickstart.md (`gh repo create MKern311/icp-lead-scoring --public --source . --push`, Pages aus `docs/` auf `main`) — **nur nach expliziter Freigabe durch den Nutzer** (öffentliches Repo)
+- [x] T033 Deployment auf GitHub Pages — erledigt 2026-08-26: https://mkern311.github.io/icp-lead-scoring/ (öffentliches Repo MKern311/icp-lead-scoring, Pages aus `docs/` auf `main`)
 
 ---
 
