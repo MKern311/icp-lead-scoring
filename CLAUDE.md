@@ -16,6 +16,11 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Feature 004: `specs/004-deep-screening/` (Zweiphasen-Screening: Longlist über
   Klassen-Filter + Tiefen-Screening je Unternehmen mit Konfidenz/Belegdatum;
   Regeln fixiert in `contracts/deep-screening.md`)
+- Feature 005: `specs/005-research-quality/` (Bezugsdatum im Prompt, Beleg-Alter,
+  Nachsuche mit Ausschlussliste, Verlassen-Schutz, Ist-Kosten, 2 Firmen parallel;
+  Regeln fixiert in `contracts/research-quality.md`)
+- Feature 006: `specs/006-onboarding-brand/` (Einstiegserklärung, Schlüssel aus
+  lokaler `.env` mit Browser-Eingabe als Fallback, Markenauftritt)
 
 ## Stack & Regeln
 
@@ -24,7 +29,9 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - `docs/` = GitHub-Pages-Root (deploybar wie er ist); `docs/js/core/` = pure, DOM-freie
   Module (scoring, model, csv, profile-io) — nur diese werden getestet
 - Persistenz ausschließlich über `docs/js/store.js` (localStorage, Namespace `icp.v1.*`);
-  Bewertungen werden nie gespeichert, immer via `evaluate(profile, lead)` berechnet
+  Bewertungen werden nie gespeichert, immer via `evaluate(profile, lead)` berechnet.
+  Suchparameter des Workflows liegen unter `icp.v1.workflow.<profileId>` (nur Region,
+  Anzahl, Hinweise — nie Ergebnisse)
 - Screening: Kriterien haben `stage` (`prescreening` = online recherchierbar,
   `qualification` = 2. Screening; Default qualification), `searchTargets` (bevorzugte
   Options-IDs bei Auswahl-Kriterien, per Klick — Longlist nutzt sie als harte
@@ -43,16 +50,31 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   Belegdatum `JJJJ-MM` je Wert, Quellenpflicht in `parseDeepResult`) — nie für
   gespeicherte Leads. `qualificationQueue` bestimmt offene Screening-Leads für
   Schritt 4. Katalog: `criterionCatalog` (`templates.js`, kategorisierte reine Daten)
-  per `criterionFromCatalog` übernehmen.
+  per `criterionFromCatalog` übernehmen. Beide Requests nennen das Bezugsdatum
+  (`todayIso()`); die Nachsuche schließt Kandidaten **des laufenden Laufs** per
+  `exclude` aus (nie gespeicherte Leads). Beleg-Alter (`isEvidenceStale`, 12 Monate)
+  und Kosten (`usageCost`, USD) werden zur Renderzeit berechnet, nie gespeichert;
+  `DEEP_CONCURRENCY = 2` Firmen laufen gleichzeitig.
 - Tests: `node --test tests/` (Node ≥ 20); Scoring-Regeln sind in
   `specs/001-icp-lead-scoring/contracts/scoring-engine.md` fixiert — Änderungen dort zuerst
 - UI-Texte deutsch, Code-Bezeichner englisch; Nutzereingaben beim Rendern immer escapen
+- Design folgt manuelkern.com (`app/globals.css` + `docs/2026-08-10_design-modernisierungs-
+  plan_v1.md`): Indigo `#292C87` trägt die Struktur, Coral `#D93D29` **ausschließlich**
+  die primäre Aktion und den Fokus-Ring, Navy `#0f1140` die Überschriften. Archivo für
+  Überschriften, Inter für Fließtext — beide lokal unter `docs/fonts/`, keine externen
+  Requests. Bewegung: Press 120 ms, Hover 200 ms (nur hinter `@media (hover: hover)`),
+  nur `transform`/`opacity`, `prefers-reduced-motion` global respektiert. Kein Dark Mode
 - CSV: Semikolon-Auto-Erkennung, UTF-8-BOM beim Export (deutsches Excel), Details in
   `contracts/csv-format.md`
 
 ## Befehle
 
 ```bash
-node --test tests/*.test.js                         # Kernlogik-Tests
-python3 -m http.server 8080 --directory docs        # lokal starten
+node --test tests/*.test.js     # Kernlogik-Tests
+node serve.mjs                  # lokal starten (http://localhost:8080, liest .env)
 ```
+
+`serve.mjs` liefert `docs/` aus und reicht `ANTHROPIC_API_KEY` aus `.env` unter
+`/__local-config` an den Browser (nur localhost, `no-store`, bei jeder Anfrage neu
+gelesen). `.env` ist gitignored — Vorlage: `.env.example`. Ohne Server (GitHub Pages)
+greift unverändert die Schlüssel-Eingabe im Browser.

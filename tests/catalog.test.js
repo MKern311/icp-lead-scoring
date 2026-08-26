@@ -4,7 +4,8 @@ import {
   createProfile, createCriterion, createTier, criterionFromCatalog, validateProfile,
   profileCatalogFindings,
 } from '../docs/js/core/model.js';
-import { criterionCatalog, retiredCriterionNames } from '../docs/js/templates.js';
+import { criterionCatalog, retiredCriterionNames, templates } from '../docs/js/templates.js';
+import { importProfile } from '../docs/js/core/profile-io.js';
 import {
   prescreeningCriteria, longlistCriteria, buildDeepScreeningRequest, buildLonglistRequest,
 } from '../docs/js/core/screening.js';
@@ -162,4 +163,64 @@ test('Katalog: Deep-Request serialisiert alle Einträge, Longlist nur die Auswah
   const long = buildLonglistRequest(p, {}).messages[0].content;
   const growthEntry = criterionCatalog.find((e) => e.category === 'Wachstum & Dynamik');
   assert.ok(!long.includes(growthEntry.name), 'Signale gehören nicht in die Longlist');
+});
+
+// --- Mitgelieferte Beispielprofile (Feature 005) ---
+
+test('Vorlagen: importierbar und mit Auswahl-Kriterien für die Longlist ausgestattet', () => {
+  for (const tpl of templates) {
+    const { profile, errors } = importProfile(structuredClone(tpl));
+    assert.deepEqual(errors, [], `${tpl.profile.name}: Import-Fehler`);
+    assert.ok(longlistCriteria(profile).length > 0,
+      `${tpl.profile.name}: ohne Auswahl-Kriterium im Pre-Screening findet die Longlist nichts`);
+    // Suchpräferenzen der Vorlage müssen auf echte Ausprägungen zeigen (Label → neue ID)
+    for (const c of profile.criteria) {
+      const optionIds = new Set((c.rules.options || []).map((o) => o.id));
+      for (const t of c.searchTargets) {
+        assert.ok(optionIds.has(t), `${tpl.profile.name}/${c.name}: Suchauswahl zeigt ins Leere`);
+      }
+    }
+  }
+});
+
+test('Vorlagen: Größenklassen sind Auswahlfelder und wirken als harte Filter', () => {
+  for (const tpl of templates) {
+    const { profile } = importProfile(structuredClone(tpl));
+    const size = profile.criteria.find((c) => c.name === 'Unternehmensgröße (Mitarbeiter)');
+    assert.ok(size, `${tpl.profile.name}: Größenkriterium fehlt`);
+    assert.equal(size.type, 'select');
+    assert.ok(size.searchTargets.length > 0);
+    const text = buildLonglistRequest(profile, {}).messages[0].content;
+    assert.match(text, /Erforderlich: /);
+  }
+});
+
+test('Aufräumen: gleicher Name, anderer Typ ⇒ type-mismatch mit Katalog-Eintrag als Ziel', () => {
+  const p = createProfile('Altlast');
+  // Bestandsprofil aus der Zeit vor den festen Klassen: Größe als Zahlenbereich
+  const size = createCriterion('range');
+  size.name = 'Unternehmensgröße (Mitarbeiter)';
+  size.stage = 'prescreening';
+  // Gleicher Name UND gleicher Typ ⇒ kein Befund
+  const ok = createCriterion('select');
+  ok.name = 'Branche';
+  ok.stage = 'prescreening';
+  ok.rules.options = [{ id: 'a', label: 'A', points: 100 }, { id: 'b', label: 'B', points: 0 }];
+  p.criteria = [size, ok];
+
+  const findings = profileCatalogFindings(p, criterionCatalog, retiredCriterionNames);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].kind, 'type-mismatch');
+  assert.equal(findings[0].name, 'Unternehmensgröße (Mitarbeiter)');
+  assert.equal(findings[0].successor, 'Unternehmensgröße (Mitarbeiter)');
+  assert.equal(findings[0].catalogType, 'select');
+  assert.equal(findings[0].currentType, 'range');
+
+  // Umstellen liefert ein Longlist-taugliches Auswahl-Kriterium
+  const entry = criterionCatalog.find((e) => e.name === findings[0].successor);
+  const fixed = criterionFromCatalog(entry);
+  fixed.stage = size.stage;
+  p.criteria.splice(0, 1, fixed);
+  assert.equal(longlistCriteria(p).length, 2);
+  assert.deepEqual(profileCatalogFindings(p, criterionCatalog, retiredCriterionNames), []);
 });

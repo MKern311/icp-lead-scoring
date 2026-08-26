@@ -86,6 +86,27 @@ export function refreshActiveProfileIndicator() {
   el.textContent = active ? `Aktives Profil: ${active.name}` : 'Kein aktives Profil';
 }
 
+// --- Verlassen-Schutz ---
+// Views mit teuren, noch nicht übernommenen Ergebnissen (Screening-Läufe) melden hier
+// eine Rückfrage an. Der Guard gilt nur für den View, der ihn gesetzt hat, und wird
+// beim Routenwechsel automatisch verworfen. Native confirm()-Rückfrage, weil
+// hashchange synchron entschieden werden muss.
+
+let leaveGuard = null;      // () => string|null — Meldung, falls ungesicherte Arbeit vorliegt
+let currentHash = null;
+let suppressGuard = false;  // verhindert eine zweite Rückfrage beim Zurücksetzen des Hash
+
+export function setLeaveGuard(fn) {
+  leaveGuard = fn;
+}
+
+window.addEventListener('beforeunload', (e) => {
+  if (leaveGuard?.()) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
 // --- Routing ---
 
 const routes = [
@@ -99,6 +120,19 @@ const routes = [
 
 function router() {
   const hash = location.hash || '#/profile';
+
+  if (hash !== currentHash) {
+    const warning = suppressGuard ? null : leaveGuard?.();
+    if (warning && !window.confirm(warning)) {
+      suppressGuard = true;
+      location.hash = currentHash;   // löst erneut hashchange aus — dort übersprungen
+      return;
+    }
+    suppressGuard = false;
+    leaveGuard = null;               // der neue View setzt beim Rendern seinen eigenen Guard
+  }
+  currentHash = hash;
+
   const route = routes.find((r) => r.pattern.test(hash)) || routes[0];
   const params = hash.match(route.pattern)?.slice(1) || [];
 
@@ -114,6 +148,11 @@ function router() {
 }
 
 window.addEventListener('hashchange', router);
+
+// Lokale Konfiguration zuerst laden (Feature 006): liegt ein Schlüssel in `.env`,
+// soll die Screening-Ansicht ihn beim ersten Rendern schon kennen. Der Aufruf
+// scheitert auf statischem Hosting still und verzögert dort nichts.
+await store.loadLocalConfig();
 router();
 
 // --- Service Worker (offline nach erstem Laden, Constitution III) ---

@@ -4,6 +4,7 @@
 import * as store from '../store.js';
 import { createLead } from '../core/model.js';
 import { evaluate } from '../core/scoring.js';
+import { isEvidenceStale, todayIso, EVIDENCE_MAX_AGE_MONTHS } from '../core/screening.js';
 import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue } from '../app.js';
 
 let container = null;
@@ -128,9 +129,13 @@ function criterionField(c) {
   const conf = working.confidence?.[c.id];
   const confBadge = conf === 'direct' ? ' <span class="badge badge-confidence-direct">belegt</span>'
     : conf === 'inferred' ? ' <span class="badge badge-confidence-inferred">abgeleitet</span>' : '';
-  const evidenceDate = working.evidenceDates?.[c.id] ? ` · Stand ${esc(working.evidenceDates[c.id])}` : '';
+  const rawDate = working.evidenceDates?.[c.id];
+  const evidenceDate = rawDate ? ` · Stand ${esc(rawDate)}` : '';
+  // Beleg-Alter (FR-408): zur Renderzeit berechnet, nie gespeichert
+  const stale = isEvidenceStale(rawDate, todayIso())
+    ? ` <span class="badge badge-stale" title="Beleg älter als ${EVIDENCE_MAX_AGE_MONTHS} Monate">Beleg veraltet</span>` : '';
   const source = working.sources?.[c.id]
-    ? `<div class="hint">Quelle: <a href="${esc(working.sources[c.id])}" target="_blank" rel="noopener noreferrer">${esc(working.sources[c.id])}</a>${confBadge}${evidenceDate}</div>`
+    ? `<div class="hint">Quelle: <a href="${esc(working.sources[c.id])}" target="_blank" rel="noopener noreferrer">${esc(working.sources[c.id])}</a>${confBadge}${evidenceDate}${stale}</div>`
     : '';
   return `
     <div class="field">

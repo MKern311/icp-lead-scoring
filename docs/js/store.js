@@ -55,6 +55,7 @@ export function saveProfile(profile) {
 // erscheinen als „Leads ohne Profil" in der Profil-Übersicht.
 export function deleteProfile(id) {
   write('profiles', listProfiles().filter((p) => p.id !== id));
+  remove(`workflow.${id}`);
   const settings = getSettings();
   if (settings.activeProfileId === id) {
     setSettings({ ...settings, activeProfileId: null });
@@ -174,9 +175,53 @@ function setRecalcFlag(profileId) {
   setSettings(s);
 }
 
+// --- Suchparameter des Workflows (je Profil) ---
+// Reine Bedien-Bequemlichkeit: Region, Anzahl und globale Hinweise überleben einen
+// Neustart. Keine Bewertungen, keine Ergebnisse — die bleiben flüchtig (FR-010).
+
+export function getWorkflowParams(profileId) {
+  const raw = read(`workflow.${profileId}`, null);
+  if (!raw || typeof raw !== 'object') return null;
+  const count = Number(raw.count);
+  return {
+    region: typeof raw.region === 'string' && raw.region.trim() ? raw.region.slice(0, 120) : 'DACH',
+    count: Number.isFinite(count) ? Math.min(50, Math.max(5, Math.round(count))) : 20,
+    hints: typeof raw.hints === 'string' ? raw.hints.slice(0, 1000) : '',
+  };
+}
+
+export function setWorkflowParams(profileId, { region, count, hints }) {
+  write(`workflow.${profileId}`, { region, count, hints });
+}
+
 // --- API-Schlüssel (Screening) — eigener Key, niemals Teil von Exporten ---
+// Zwei Quellen mit klarer Rangfolge (Feature 006): ein Schlüssel aus der lokalen
+// `.env` (nur über `node serve.mjs` verfügbar) hat Vorrang; sonst gilt der im
+// Browser hinterlegte. Der .env-Schlüssel wird bewusst NICHT in localStorage
+// gespiegelt — er soll mit dem Server verschwinden, nicht im Browser zurückbleiben.
+
+let envApiKey = null;
+
+export async function loadLocalConfig() {
+  try {
+    const res = await fetch('./__local-config', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (typeof cfg?.apiKey === 'string' && cfg.apiKey.trim()) envApiKey = cfg.apiKey.trim();
+  } catch {
+    // Statisches Hosting, offline oder Server ohne Endpunkt — der Browser-Schlüssel bleibt maßgeblich.
+  }
+}
+
+export function hasEnvApiKey() {
+  return envApiKey !== null;
+}
 
 export function getApiKey() {
+  return envApiKey || localStorage.getItem(`${NS}apikey`) || null;
+}
+
+export function getBrowserApiKey() {
   return localStorage.getItem(`${NS}apikey`) || null;
 }
 

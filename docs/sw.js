@@ -1,7 +1,7 @@
 // Service Worker: cache-first mit versioniertem Cache — offline nach erstem Laden
 // (Constitution III). Bei neuer Version Cache-Namen hochzählen.
 
-const CACHE = 'icp-cache-v8';
+const CACHE = 'icp-cache-v10';
 
 const ASSETS = [
   './',
@@ -9,6 +9,8 @@ const ASSETS = [
   './css/base.css',
   './css/layout.css',
   './css/components.css',
+  './fonts/archivo-latin.woff2',
+  './fonts/inter-latin.woff2',
   './js/app.js',
   './js/store.js',
   './js/templates.js',
@@ -41,6 +43,9 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Lokale Konfiguration nie zwischenspeichern — ein alter Schlüssel wäre schlimmer
+  // als gar keiner (Feature 006).
+  if (new URL(event.request.url).pathname.endsWith('/__local-config')) return;
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then((cached) => cached || fetch(event.request)),
   );

@@ -80,7 +80,9 @@ export function criterionFromCatalog(entry) {
 export function profileCatalogFindings(profile, catalog, retiredNames = []) {
   const norm = (s) => String(s || '').trim().toLowerCase();
   const successorOf = new Map();
+  const entryByName = new Map();
   for (const entry of catalog || []) {
+    entryByName.set(norm(entry.name), entry);
     for (const oldName of entry.replaces || []) successorOf.set(norm(oldName), entry.name);
   }
   const retired = new Set((retiredNames || []).map(norm));
@@ -92,6 +94,19 @@ export function profileCatalogFindings(profile, catalog, retiredNames = []) {
     else seen.set(n, c.id);
     if (successorOf.has(n)) findings.push({ criterionId: c.id, name: c.name, kind: 'replaced', successor: successorOf.get(n) });
     else if (retired.has(n)) findings.push({ criterionId: c.id, name: c.name, kind: 'retired' });
+    else {
+      // Gleicher Name, anderer Typ: typische Altlast aus Profilen, die vor der
+      // Umstellung auf feste Klassen entstanden sind (z. B. Unternehmensgröße als
+      // Zahlenbereich). Solche Kriterien taugen nicht als Klassen-Filter der
+      // Kandidatensuche und werden im Katalog nicht mehr angeboten.
+      const entry = entryByName.get(n);
+      if (entry && entry.type !== c.type) {
+        findings.push({
+          criterionId: c.id, name: c.name, kind: 'type-mismatch',
+          successor: entry.name, catalogType: entry.type, currentType: c.type,
+        });
+      }
+    }
   }
   return findings;
 }

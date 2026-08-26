@@ -6,8 +6,8 @@ import {
   prescreeningCriteria, longlistCriteria,
   buildLonglistRequest, buildDeepScreeningRequest,
   parseCandidates, parseDeepResult, mergeDeepIntoCandidate, candidateToLead,
-  qualificationQueue, estimateDeepCost,
-  SCREENING_MODEL, LONGLIST_MAX_SEARCHES, DEEP_MAX_SEARCHES,
+  qualificationQueue, estimateDeepCost, usageCost, addUsage, isEvidenceStale, todayIso,
+  SCREENING_MODEL, LONGLIST_MAX_SEARCHES, DEEP_MAX_SEARCHES, PRICING,
 } from '../docs/js/core/screening.js';
 
 function fixture() {
@@ -327,8 +327,108 @@ test('SC-404: evaluate identisch mit und ohne Konfidenz-Metadaten (Verfassung II
 });
 
 test('estimateDeepCost: Spanne je Firma × Anzahl, 2 Nachkommastellen', () => {
-  assert.deepEqual(estimateDeepCost(10), { min: 1.5, max: 3.5 });
+  assert.deepEqual(estimateDeepCost(10), { min: 1.5, max: 4 });
   assert.deepEqual(estimateDeepCost(0), { min: 0, max: 0 });
+});
+
+// --- Bezugsdatum der Recherche (FR-408) ---
+
+test('FR-408: beide Requests nennen das heutige Datum als Bezugspunkt für Zeitangaben', () => {
+  const { p } = fixture();
+  const longlist = buildLonglistRequest(p, { today: '2026-08-26' });
+  const deep = buildDeepScreeningRequest(p, { name: 'Muster GmbH' }, { today: '2026-08-26' });
+  for (const req of [longlist, deep]) {
+    const text = req.messages[0].content;
+    assert.match(text, /Heutiges Datum: 2026-08-26/);
+    assert.match(text, /letzten 12 Monaten/);
+  }
+});
+
+test('FR-408: ungültiges Datum erzeugt keine Datumszeile (statt einer falschen)', () => {
+  const { p } = fixture();
+  const text = buildLonglistRequest(p, { today: 'irgendwann' }).messages[0].content;
+  assert.doesNotMatch(text, /Heutiges Datum/);
+});
+
+test('todayIso liefert JJJJ-MM-TT', () => {
+  assert.match(todayIso(), /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/);
+});
+
+// --- Nachsuche mit Ausschlussliste (FR-409) ---
+
+test('FR-409: exclude-Namen erscheinen als Ausschlussliste im Longlist-Request', () => {
+  const { p } = fixture();
+  const text = buildLonglistRequest(p, { exclude: ['Alpha AG', '  Beta GmbH  ', '', null] }).messages[0].content;
+  assert.match(text, /NICHT erneut vor/);
+  assert.match(text, /- Alpha AG/);
+  assert.match(text, /- Beta GmbH/);
+  assert.equal((text.match(/^- /gm) || []).length, 2, 'leere Einträge werden übersprungen');
+});
+
+test('FR-409: ohne exclude keine Ausschlusszeile; Liste ist auf 150 Namen begrenzt', () => {
+  const { p } = fixture();
+  assert.doesNotMatch(buildLonglistRequest(p, {}).messages[0].content, /NICHT erneut vor/);
+  const many = Array.from({ length: 200 }, (_, i) => `Firma ${i}`);
+  const text = buildLonglistRequest(p, { exclude: many }).messages[0].content;
+  assert.equal((text.match(/^- Firma /gm) || []).length, 150);
+});
+
+test('FR-409: Ausschlussliste enthält weiterhin keine Gewichte, Punkte oder Quali-Kriterien', () => {
+  const { p, budget } = fixture();
+  const json = JSON.stringify(buildLonglistRequest(p, { exclude: ['Alpha AG'] }));
+  assert.ok(!json.includes(budget.name));
+  assert.ok(!json.includes('"weight"'));
+  assert.ok(!json.includes('"points"'));
+});
+
+// --- Beleg-Alter (FR-408) ---
+
+test('isEvidenceStale: älter als 12 Monate ⇒ veraltet, Grenzfall exakt 12 nicht', () => {
+  assert.equal(isEvidenceStale('2025-08', '2026-08-26'), false, 'genau 12 Monate ist noch frisch');
+  assert.equal(isEvidenceStale('2025-07', '2026-08-26'), true);
+  assert.equal(isEvidenceStale('2026-08', '2026-08-26'), false);
+  assert.equal(isEvidenceStale('2024-01', '2026-08-26', 36), false, 'eigene Höchstdauer wird beachtet');
+});
+
+test('isEvidenceStale: unbekannte oder kaputte Daten gelten nie als veraltet', () => {
+  for (const bad of [undefined, null, '', 'gestern', '2025-13', '2025']) {
+    assert.equal(isEvidenceStale(bad, '2026-08-26'), false);
+  }
+  assert.equal(isEvidenceStale('2020-01', 'kein Datum'), false);
+});
+
+// --- Kosten aus dem tatsächlichen Verbrauch (FR-412) ---
+
+test('usageCost: Token- und Suchkosten nach Listenpreis, Cache-Faktoren berücksichtigt', () => {
+  const cost = usageCost({
+    input_tokens: 1e6, output_tokens: 1e6,
+    cache_creation_input_tokens: 1e6, cache_read_input_tokens: 1e6,
+    server_tool_use: { web_search_requests: 100 },
+  });
+  // Input: (1 + 1,25 + 0,1) Mio. × 5 $ = 11,75 $ · Output: 25 $ · Suche: 100/1000 × 10 $ = 1 $
+  assert.equal(cost.input, 11.75);
+  assert.equal(cost.output, 25);
+  assert.equal(cost.search, 1);
+  assert.equal(cost.total, 37.75);
+  assert.equal(cost.searches, 100);
+});
+
+test('usageCost: fehlende oder unsinnige Felder ergeben 0 statt NaN', () => {
+  for (const bad of [null, undefined, {}, { input_tokens: 'viel', output_tokens: -5 }]) {
+    const cost = usageCost(bad);
+    assert.equal(cost.total, 0);
+    assert.equal(cost.searches, 0);
+  }
+  assert.equal(PRICING.currency, 'USD');
+});
+
+test('addUsage: summiert über Fortsetzungen, verträgt null als Startwert', () => {
+  const first = addUsage(null, { input_tokens: 10, output_tokens: 5, server_tool_use: { web_search_requests: 2 } });
+  const total = addUsage(first, { input_tokens: 3, output_tokens: 1, server_tool_use: { web_search_requests: 4 } });
+  assert.equal(total.input_tokens, 13);
+  assert.equal(total.output_tokens, 6);
+  assert.equal(total.server_tool_use.web_search_requests, 6);
+  assert.equal(addUsage(null, null).input_tokens, 0);
 });
 
 // --- Warteschlange (Feature 003, unverändert) ---

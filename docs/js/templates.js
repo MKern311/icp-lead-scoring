@@ -277,7 +277,8 @@ export const templates = [
           weight: 25,
           knockout: false,
           stage: 'prescreening',
-          searchHint: 'Bevorzugt IT/Software und Industrie/Fertigung',
+          // Bevorzugte Klassen werden im Workflow angeklickt (searchTargets) — kein Freitext.
+          searchTargets: ['IT / Software', 'Industrie / Fertigung'],
           rules: {
             options: [
               { label: 'IT / Software', points: 100 },
@@ -289,19 +290,21 @@ export const templates = [
           },
         },
         {
+          // Auswahlfeld statt Zahlenbereich: nur Auswahl-Kriterien taugen als
+          // Klassen-Filter der Longlist. Klassen nach EU-KMU-Definition 2003/361/EG.
           name: 'Unternehmensgröße (Mitarbeiter)',
-          description: 'Sweet Spot: Mittelstand mit etablierten Strukturen.',
-          type: 'range',
+          description: 'Sweet Spot: Mittelstand mit etablierten Strukturen (Größenklassen nach EU-KMU-Definition).',
+          type: 'select',
           weight: 20,
           knockout: false,
           stage: 'prescreening',
-          searchHint: 'Bevorzugt 50–249 Mitarbeiter',
+          searchTargets: ['Mittleres Unternehmen (50–249 Mitarbeiter)'],
           rules: {
-            ranges: [
-              { min: 1, max: 9, points: 30 },
-              { min: 10, max: 49, points: 70 },
-              { min: 50, max: 249, points: 100 },
-              { min: 250, max: 5000, points: 60 },
+            options: [
+              { label: 'Kleinstunternehmen (unter 10 Mitarbeiter)', points: 30 },
+              { label: 'Kleines Unternehmen (10–49 Mitarbeiter)', points: 70 },
+              { label: 'Mittleres Unternehmen (50–249 Mitarbeiter)', points: 100 },
+              { label: 'Großunternehmen (250 und mehr Mitarbeiter)', points: 60 },
             ],
           },
         },
@@ -357,19 +360,21 @@ export const templates = [
       missingValuePolicy: 'neutral',
       criteria: [
         {
-          name: 'Teamgröße (Nutzer)',
-          description: 'Wie viele Personen würden das Produkt nutzen?',
-          type: 'range',
+          // Auswahlfeld statt Zahlenbereich: Klassen-Filter der Longlist brauchen
+          // Auswahl-Kriterien. Klassen nach EU-KMU-Definition 2003/361/EG.
+          name: 'Unternehmensgröße (Mitarbeiter)',
+          description: 'Größenklasse des Unternehmens — bestimmt die Zahl potenzieller Nutzer (EU-KMU-Definition).',
+          type: 'select',
           weight: 20,
           knockout: false,
           stage: 'prescreening',
-          searchHint: 'Bevorzugt Teams mit 11–50 potenziellen Nutzern',
+          searchTargets: ['Kleines Unternehmen (10–49 Mitarbeiter)', 'Mittleres Unternehmen (50–249 Mitarbeiter)'],
           rules: {
-            ranges: [
-              { min: 1, max: 10, points: 40 },
-              { min: 11, max: 50, points: 100 },
-              { min: 51, max: 200, points: 80 },
-              { min: 201, max: 10000, points: 50 },
+            options: [
+              { label: 'Kleinstunternehmen (unter 10 Mitarbeiter)', points: 40 },
+              { label: 'Kleines Unternehmen (10–49 Mitarbeiter)', points: 100 },
+              { label: 'Mittleres Unternehmen (50–249 Mitarbeiter)', points: 80 },
+              { label: 'Großunternehmen (250 und mehr Mitarbeiter)', points: 50 },
             ],
           },
         },
@@ -389,7 +394,7 @@ export const templates = [
           weight: 25,
           knockout: false,
           stage: 'prescreening',
-          searchHint: 'Bevorzugt Technologie und Professional Services',
+          searchTargets: ['Technologie', 'Professional Services'],
           rules: {
             options: [
               { label: 'Technologie', points: 100 },

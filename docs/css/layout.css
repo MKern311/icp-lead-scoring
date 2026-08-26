@@ -1,32 +1,41 @@
-/* Seitengerüst */
+/* Seitengerüst — ruhige Flächen, Tiefe statt harter Kanten (Website-Leitbild) */
 .app-header {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: var(--shadow-nav);
 }
 
 .brand {
+  font-family: var(--font-heading);
   font-weight: 700;
   font-size: 1.05rem;
-  color: var(--color-text);
+  letter-spacing: -0.02em;
+  color: var(--color-navy);
   text-decoration: none;
   white-space: nowrap;
 }
 
-.main-nav { display: flex; gap: var(--space-2); flex: 1; }
+.main-nav { display: flex; gap: var(--space-1); flex: 1; flex-wrap: wrap; }
 
 .main-nav a {
   text-decoration: none;
   color: var(--color-text-muted);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius);
-  font-weight: 500;
+  padding: 0.6rem var(--space-3);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  transition: background-color var(--dur-hover) ease, color var(--dur-hover) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .main-nav a:hover { background: var(--color-primary-soft); color: var(--color-primary); }
 }
 
 .main-nav a.active {
@@ -35,7 +44,7 @@
 }
 
 .active-profile {
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   color: var(--color-text-muted);
   max-width: 16rem;
   overflow: hidden;
@@ -44,9 +53,9 @@
 }
 
 #app {
-  max-width: 68rem;
+  max-width: 72rem;
   margin: 0 auto;
-  padding: var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-4);
 }
 
 .view > .view-header {
@@ -63,16 +72,46 @@
 .app-footer {
   text-align: center;
   color: var(--color-text-muted);
-  font-size: 0.8rem;
-  padding: var(--space-4);
+  font-size: 0.8125rem;
+  padding: var(--space-5) var(--space-4);
 }
 
-.table-wrap { overflow-x: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  /* Schattenkanten zeigen an, dass seitlich noch etwas steht — sie erscheinen nur,
+     wenn tatsächlich gescrollt werden kann (background-attachment: local/scroll). */
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, rgba(255, 255, 255, 0)) left center,
+    linear-gradient(to left, var(--color-surface) 30%, rgba(255, 255, 255, 0)) right center,
+    radial-gradient(farthest-side at 0 50%, rgba(15, 17, 64, 0.14), rgba(15, 17, 64, 0)) left center,
+    radial-gradient(farthest-side at 100% 50%, rgba(15, 17, 64, 0.14), rgba(15, 17, 64, 0)) right center,
+    var(--color-surface);
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+/* Kopfzeile folgt der Rundung der Karte, statt eckig darin zu sitzen */
+.table-wrap thead th:first-child { border-top-left-radius: var(--radius-card); }
+.table-wrap thead th:last-child { border-top-right-radius: var(--radius-card); }
 
 .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-4); align-items: start; }
 
 @media (max-width: 800px) {
   .two-col { grid-template-columns: 1fr; }
-  .app-header { flex-wrap: wrap; gap: var(--space-2); }
-  .active-profile { max-width: 100%; }
+  /* Kopfzeile umbrechen: Marke und aktives Profil in einer Zeile, Navigation
+     darunter über die volle Breite — sonst erzwingt sie horizontales Scrollen. */
+  .app-header { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+  .brand { flex: 1 1 auto; min-width: 0; }
+  .main-nav { order: 3; flex-basis: 100%; overflow-x: auto; scrollbar-width: none; }
+  .main-nav::-webkit-scrollbar { display: none; }
+  .active-profile { max-width: 50%; text-align: right; font-size: 0.75rem; }
+  #app { padding: var(--space-4) var(--space-3); }
+  .score-panel { position: static; }
+  .main-nav a { padding: 0.7rem 0.9rem; }
+  /* Tabellen behalten eine lesbare Mindestbreite und scrollen in ihrem Container,
+     statt Spalten auf Buchstabenbreite zusammenzuquetschen. */
+  .table-wrap table { min-width: 40rem; }
 }

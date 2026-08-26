@@ -13,10 +13,11 @@ import {
   prescreeningCriteria, longlistCriteria,
   buildLonglistRequest, buildDeepScreeningRequest,
   parseCandidates, parseDeepResult, mergeDeepIntoCandidate, candidateToLead,
-  qualificationQueue, estimateDeepCost, COST_ESTIMATES,
+  qualificationQueue, estimateDeepCost, usageCost, addUsage, isEvidenceStale, todayIso,
+  COST_ESTIMATES, PRICING, DEEP_CONCURRENCY, EVIDENCE_MAX_AGE_MONTHS,
 } from '../core/screening.js';
 import { runScreening } from '../screening-api.js';
-import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue } from '../app.js';
+import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue, setLeaveGuard } from '../app.js';
 import { tierBadge } from './lead-form.js';
 
 let container = null;
@@ -27,7 +28,9 @@ let keptFindings = new Set();                    // „Behalten"-Entscheidungen 
 let params = { region: 'DACH', count: 20, hints: '' };
 let running = false;                             // Longlist-Lauf aktiv
 let result = null;                               // Longlist-Ergebnis { candidates, warnings, region, selected }
-let deepRun = null;                              // { entries, running, controller } — flüchtig
+let deepRun = null;                              // { entries, running, controllers } — flüchtig
+let costLog = null;                              // { usage, runs } — tatsächliche Kosten dieser Sitzung
+let today = todayIso();
 let queue = [];                                  // Schritt-4-Warteschlange (Lead-IDs)
 let position = 0;
 let processed = new Set();
@@ -45,14 +48,36 @@ export function render(section) {
     keptFindings = new Set();
     result = null;
     deepRun = null;
+    costLog = null;
+    today = todayIso();
     queue = [];
     position = 0;
     processed = new Set();
     skipped = new Set();
     drafts = new Map();
     finished = false;
+    // Suchparameter des Profils weiterverwenden (reine Bequemlichkeit, FR-411)
+    if (profile) params = store.getWorkflowParams(profile.id) || { region: 'DACH', count: 20, hints: '' };
   }
+  setLeaveGuard(unsavedWarning);
   draw();
+}
+
+// Schutz vor Verlust bezahlter Recherche (FR-410): laufender Lauf oder Ergebnisse,
+// die noch nicht als Leads übernommen wurden.
+function unsavedWarning() {
+  if (running || deepRun?.running) {
+    return 'Es läuft gerade eine Recherche. Wenn Sie die Ansicht verlassen, geht der Lauf verloren — trotzdem fortfahren?';
+  }
+  const deepDone = deepRun?.entries.filter((e) => e.status === 'done').length || 0;
+  const longlist = result?.candidates.length || 0;
+  if (deepDone > 0) {
+    return `${deepDone} tief geprüfte(s) Unternehmen wurde(n) noch nicht übernommen und geht/gehen beim Verlassen verloren — trotzdem fortfahren?`;
+  }
+  if (longlist > 0) {
+    return `${longlist} recherchierte Kandidaten wurden noch nicht übernommen und gehen beim Verlassen verloren — trotzdem fortfahren?`;
+  }
+  return null;
 }
 
 // Profil bei jedem Schrittwechsel neu lesen (Edge Case: Änderung in anderem Tab)
@@ -70,6 +95,32 @@ function stepsIndicator() {
       <span class="num">${step > i + 1 ? '✓' : i + 1}</span> ${label}
     </span>${i < labels.length - 1 ? '<span class="sep">→</span>' : ''}`).join('')}
   </div>`;
+}
+
+// --- Kosten: Schätzung vorab, tatsächlicher Verbrauch danach (FR-412) ---
+
+function fmtUsd(value) {
+  if (value > 0 && value < 0.01) return 'unter 0,01 $';
+  return `${value.toFixed(2).replace('.', ',')} $`;
+}
+
+const fmtAmount = (v) => v.toFixed(2).replace('.', ',');
+
+function trackCost(usage) {
+  costLog = { usage: addUsage(costLog?.usage, usage), runs: (costLog?.runs || 0) + 1 };
+}
+
+function costSummaryHtml() {
+  if (!costLog) return '';
+  const c = usageCost(costLog.usage);
+  const runs = costLog.runs === 1 ? '1 Lauf' : `${costLog.runs} Läufe`;
+  return `<p class="muted">Tatsächlich verbraucht in dieser Sitzung: <strong>${fmtUsd(c.total)}</strong>
+    (${runs}, ${c.searches} Websuchen) — Listenpreis ohne Steuern, maßgeblich ist Ihre Abrechnung.</p>`;
+}
+
+function staleBadge(evidenceDate) {
+  return isEvidenceStale(evidenceDate, today)
+    ? ` <span class="badge badge-stale" title="Beleg älter als ${EVIDENCE_MAX_AGE_MONTHS} Monate">Beleg veraltet</span>` : '';
 }
 
 function draw() {
@@ -167,17 +218,21 @@ function drawStep1(body) {
       Nichts wird automatisch gelöscht — „Ersetzen" übernimmt den Nachfolger mit Gewicht
       und K.o.-Status, „Behalten" lässt das Kriterium unverändert.</p>
       ${findings.map((f) => {
-        const successorInProfile = f.successor && existingNames.has(f.successor.trim().toLowerCase());
+        // Bei type-mismatch ist der „Nachfolger" der gleichnamige Katalog-Eintrag —
+        // ersetzen heißt hier: denselben Namen mit festen Klassen übernehmen.
+        const isTypeFix = f.kind === 'type-mismatch';
+        const successorInProfile = !isTypeFix && f.successor && existingNames.has(f.successor.trim().toLowerCase());
         const text = f.kind === 'duplicate' ? 'Doppelt im Profil vorhanden.'
           : f.kind === 'retired' ? 'Im überarbeiteten Katalog nicht mehr enthalten.'
+          : isTypeFix ? 'Liegt als Freitext-/Zahlenfeld vor, im Katalog als Auswahlfeld mit festen Klassen. Nur Auswahlfelder wirken als Filter der Kandidatensuche (Schritt 2).'
           : successorInProfile ? `Ersetzt durch „${esc(f.successor)}" — der Nachfolger ist bereits im Profil.`
           : `Ersetzt durch „${esc(f.successor)}".`;
         return `
         <div class="criterion-head" style="margin-bottom: var(--space-2)">
           <div class="field grow"><label>${esc(f.name)}</label><div class="hint">${text}</div></div>
           <div class="row-actions">
-            ${f.kind === 'replaced' && !successorInProfile
-              ? `<button class="btn btn-small btn-primary" data-fix-replace="${f.criterionId}">Ersetzen</button>` : ''}
+            ${(f.kind === 'replaced' && !successorInProfile) || isTypeFix
+              ? `<button class="btn btn-small btn-primary" data-fix-replace="${f.criterionId}">${isTypeFix ? 'In Klassen umstellen' : 'Ersetzen'}</button>` : ''}
             <button class="btn btn-small" data-fix-remove="${f.criterionId}">Entfernen</button>
             <button class="btn btn-small" data-fix-keep="${f.criterionId}:${f.kind}">Behalten</button>
           </div>
@@ -244,7 +299,8 @@ function drawStep1(body) {
       Zuordnungen werden sofort im Profil gespeichert. Übertragen werden nur
       Pre-Screening-Kriterien und Ihre Suchauswahl — niemals Gewichte oder Punktwerte.</p>
       ${open.length > 0
-        ? `<div class="notice notice-warn">Noch ${open.length} von ${profile.criteria.length} Kriterien unbestätigt.</div>`
+        ? `<div class="notice notice-warn">Noch ${open.length} von ${profile.criteria.length} Kriterien unbestätigt.
+             <button class="btn btn-small" data-action="confirm-all">Alle ${open.length} bestätigen</button></div>`
         : '<div class="notice notice-ok" style="background:#e7f3ec;border:1px solid #bcd9c8;border-radius:var(--radius);padding:var(--space-2) var(--space-3)">Alle Kriterien bestätigt.</div>'}
     </div>
     ${cleanupBlock}
@@ -320,24 +376,33 @@ function drawStep1(body) {
       draw();
     });
   });
+  body.querySelector('[data-action="confirm-all"]')?.addEventListener('click', () => {
+    // Sammelbestätigung: die vorgeschlagene Phase jedes Kriteriums wird übernommen.
+    profile.criteria.forEach((c) => confirmed.add(c.id));
+    readParams(body);
+    draw();
+  });
   body.querySelectorAll('[data-fix-replace]').forEach((el) => {
     el.addEventListener('click', () => {
       const idx = profile.criteria.findIndex((c) => c.id === el.dataset.fixReplace);
       if (idx < 0) return;
       const old = profile.criteria[idx];
-      const successor = profileCatalogFindings(profile, criterionCatalog, retiredCriterionNames)
-        .find((f) => f.criterionId === old.id && f.kind === 'replaced')?.successor;
-      const entry = criterionCatalog.find((e) => e.name === successor);
+      const finding = profileCatalogFindings(profile, criterionCatalog, retiredCriterionNames)
+        .find((f) => f.criterionId === old.id && (f.kind === 'replaced' || f.kind === 'type-mismatch'));
+      const entry = criterionCatalog.find((e) => e.name === finding?.successor);
       if (!entry) return;
       const c = criterionFromCatalog(entry);
       c.weight = old.weight;               // Gewicht und K.o.-Status des alten Kriteriums bleiben
       c.knockout = old.knockout;
+      c.stage = old.stage;                 // bewusste Phasen-Zuordnung bleibt erhalten
       profile.criteria.splice(idx, 1, c);
       confirmed.delete(old.id);
       confirmed.add(c.id);
       readParams(body);
       store.saveProfile(profile);
-      toast(`„${old.name}" durch „${c.name}" ersetzt.`);
+      toast(finding.kind === 'type-mismatch'
+        ? `„${c.name}" auf feste Klassen umgestellt — Punkte im Profil-Editor prüfen.`
+        : `„${old.name}" durch „${c.name}" ersetzt.`);
       draw();
     });
   });
@@ -400,6 +465,7 @@ function readParams(body) {
     count: Number.isFinite(count) && count > 0 ? count : 20,
     hints: hints ?? params.hints,
   };
+  store.setWorkflowParams(profile.id, params);   // beim nächsten Start wieder vorbelegt
 }
 
 // --- Schritt 2: Longlist — Kandidaten über Klassen-Filter finden (FR-401) ---
@@ -408,9 +474,13 @@ function maskKey(key) {
   return key.length > 12 ? `${key.slice(0, 7)}…${key.slice(-4)}` : '…';
 }
 
-function keyBlockHtml(apiKey) {
-  return apiKey
-    ? `<p>Hinterlegter Schlüssel: <code>${esc(maskKey(apiKey))}</code>
+// Schlüssel-Block mit zwei Quellen (Feature 006): Ein Schlüssel aus der lokalen
+// `.env` hat Vorrang und wird nur angezeigt, nicht bearbeitet. Die Eingabe im
+// Browser bleibt in beiden Fällen erreichbar — bei aktiver .env eingeklappt.
+function keyInputHtml() {
+  const stored = store.getBrowserApiKey();
+  return stored
+    ? `<p>Im Browser hinterlegt: <code>${esc(maskKey(stored))}</code>
          <button class="btn btn-small" data-action="clear-key">Schlüssel löschen</button></p>`
     : `<div class="inline-fields">
          <div class="field" style="flex:3">
@@ -422,6 +492,23 @@ function keyBlockHtml(apiKey) {
        <div class="hint">Der Schlüssel wird ausschließlich lokal in diesem Browser gespeichert und nur an
        api.anthropic.com gesendet — nie in Exporten. Nur auf vertrauenswürdigen Geräten hinterlegen.
        Schlüssel erhalten Sie unter platform.claude.com.</div>`;
+}
+
+function keyBlockHtml() {
+  if (store.hasEnvApiKey()) {
+    return `
+      <div class="key-source">
+        <span class="badge badge-env">aus .env</span>
+        <span class="muted">Der Schlüssel aus Ihrer lokalen <code>.env</code> wird verwendet — im Browser ist nichts zu hinterlegen.</span>
+      </div>
+      <details class="class-details" style="margin-top: var(--space-2)">
+        <summary>Stattdessen einen Schlüssel im Browser hinterlegen</summary>
+        <div class="hint" style="margin-bottom: var(--space-2)">Wird nur genutzt, wenn kein
+        <code>.env</code>-Schlüssel vorliegt — etwa auf einem anderen Gerät oder nach dem Deployment.</div>
+        ${keyInputHtml()}
+      </details>`;
+  }
+  return keyInputHtml();
 }
 
 function drawStep2(body) {
@@ -446,10 +533,11 @@ function drawStep2(body) {
       Tiefen-Screening (Schritt 3) je Unternehmen recherchiert.</p>
       <div class="card">
         <h2>API-Schlüssel</h2>
-        ${keyBlockHtml(apiKey)}
+        ${keyBlockHtml()}
       </div>
       <div class="notice notice-warn">Der Lauf nutzt Ihren eigenen API-Schlüssel; Kosten grob
-      ${String(costLo).replace('.', ',')}–${String(costHi).replace('.', ',')}&nbsp;€.</div>
+      ${fmtAmount(costLo)}–${fmtAmount(costHi)}&nbsp;$.</div>
+      ${costSummaryHtml()}
       <div class="row-actions">
         <button class="btn" data-action="back-1" ${running ? 'disabled' : ''}>Zurück zu Schritt 1</button>
         <button class="btn btn-primary" data-action="start" ${(!apiKey || longlist.length === 0 || running) ? 'disabled' : ''}>
@@ -493,43 +581,90 @@ async function handleStep2Action(action, body) {
   if (action === 'start') startLonglist(body);
 }
 
-async function startLonglist(body) {
+// Kandidaten sind vorausgewählt — außer sie tragen den Namen eines bestehenden Leads.
+function preselect(candidates, offset = 0) {
+  const existing = new Set(store.listLeads(profile.id).map((l) => l.name.trim().toLowerCase()));
+  const selected = new Set();
+  candidates.forEach((c, i) => {
+    if (!existing.has(c.name.trim().toLowerCase())) selected.add(offset + i);
+  });
+  return selected;
+}
+
+// append: Nachsuche mit Ausschluss der bereits gefundenen Namen (FR-409). Übergeben
+// werden ausschließlich Kandidaten dieses Laufs — nie gespeicherte Leads.
+async function startLonglist(body, { append = false } = {}) {
+  const previous = append && result ? result.candidates : [];
   let request;
   try {
-    request = buildLonglistRequest(profile, params);
+    request = buildLonglistRequest(profile, { ...params, today, exclude: previous.map((c) => c.name) });
   } catch (e) {
     toast(e.message);
     return;
   }
 
-  running = true;
-  result = null;
-  body.querySelector('[data-action="start"]').disabled = true;
-  body.querySelector('[data-action="back-1"]').disabled = true;
-  body.querySelector('#wf-results').innerHTML = '';
+  const lockButtons = (locked) => {
+    const start = body.querySelector('[data-action="start"]');
+    if (start) start.disabled = locked;
+    const back = body.querySelector('[data-action="back-1"]');
+    if (back) back.disabled = locked;
+  };
 
+  running = true;
+  if (!append) {
+    result = null;
+    body.querySelector('#wf-results').innerHTML = '';
+  }
+  lockButtons(true);
+
+  let error = null;
+  let message = '';
   try {
-    const { output } = await runScreening(store.getApiKey(), request, setStatus);
+    const { output, usage } = await runScreening(store.getApiKey(), request, setStatus);
+    trackCost(usage);
     const parsed = parseCandidates(output, profile);
-    result = { ...parsed, region: params.region, selected: new Set(parsed.candidates.map((_, i) => i)) };
-    setStatus('');
-    if (parsed.candidates.length === 0) {
-      body.querySelector('#wf-results').innerHTML =
-        '<div class="notice notice-warn">Die Suche lieferte keine belegbaren Kandidaten. Versuchen Sie eine breitere Region oder weniger harte Filter.</div>';
+
+    if (append) {
+      // Namensgleiche Treffer aus dem Vorlauf verwerfen — die KI hält den Ausschluss
+      // nicht immer ein.
+      const known = new Set(previous.map((c) => c.name.trim().toLowerCase()));
+      const fresh = parsed.candidates.filter((c) => !known.has(c.name.trim().toLowerCase()));
+      const dropped = parsed.candidates.length - fresh.length;
+      result = {
+        candidates: [...previous, ...fresh],
+        warnings: [...result.warnings, ...parsed.warnings],   // Verworfenes bleibt sichtbar
+        region: params.region,
+        selected: new Set([...result.selected, ...preselect(fresh, previous.length)]),
+      };
+      message = fresh.length > 0
+        ? `${fresh.length} weitere Kandidaten gefunden${dropped > 0 ? ` (${dropped} Wiederholung(en) verworfen)` : ''}.`
+        : 'Keine weiteren Kandidaten gefunden — die Suche ist ausgeschöpft.';
     } else {
-      drawLonglistResults(body);
+      result = { ...parsed, region: params.region, selected: preselect(parsed.candidates) };
     }
   } catch (e) {
-    setStatus('');
-    body.querySelector('#wf-results').innerHTML =
-      `<div class="notice notice-error">${esc(e.message)}</div>`;
-  } finally {
-    running = false;
-    const btn = body.querySelector('[data-action="start"]');
-    if (btn) btn.disabled = false;
-    const back = body.querySelector('[data-action="back-1"]');
-    if (back) back.disabled = false;
+    error = e;
   }
+
+  // Erst entsperren, dann zeichnen — sonst rendert die Ergebnisansicht ihre
+  // eigenen Schaltflächen als deaktiviert.
+  running = false;
+  setStatus('');
+  lockButtons(false);
+
+  const target = body.querySelector('#wf-results');
+  if (error) {
+    if (append) { toast(error.message); drawLonglistResults(body); }
+    else if (target) target.innerHTML = `<div class="notice notice-error">${esc(error.message)}</div>`;
+    return;
+  }
+  if (message) toast(message);
+  if (result.candidates.length === 0 && target) {
+    target.innerHTML =
+      '<div class="notice notice-warn">Die Suche lieferte keine belegbaren Kandidaten. Versuchen Sie eine breitere Region oder weniger harte Filter.</div>';
+    return;
+  }
+  drawLonglistResults(body);
 }
 
 function shortUrl(url) {
@@ -572,6 +707,8 @@ function drawLonglistResults(body) {
       </tr>`;
   }).join('');
 
+  const dupCount = result.candidates.filter((c) => existingNames.has(c.name.trim().toLowerCase())).length;
+
   target.innerHTML = `
     <div class="card">
       <h2>Kandidaten (${result.candidates.length})</h2>
@@ -579,15 +716,21 @@ function drawLonglistResults(body) {
         <div class="notice notice-warn"><ul>${result.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>` : ''}
       <p class="muted">Die Longlist zeigt nur die Klassen-Filter. Das granulare Bild (Signale,
       Konfidenz, Belegdatum) entsteht im Tiefen-Screening. Ohne Übernahme wird nichts gespeichert.</p>
+      ${dupCount > 0 ? `<p class="muted">${dupCount} Kandidat(en) tragen den Namen bestehender Leads und sind
+        deshalb nicht vorausgewählt.</p>` : ''}
+      ${costSummaryHtml()}
       <div class="table-wrap"><table>
         <thead><tr><th></th><th>Kandidat</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
       <div class="row-actions" style="margin-top: var(--space-3)">
         <button class="btn" data-result-action="toggle-all">Alle an/abwählen</button>
+        <button class="btn" data-result-action="more" ${running ? 'disabled' : ''}>Weitere Kandidaten suchen</button>
         <button class="btn btn-primary" data-result-action="deep">Tiefen-Screening für Auswahl</button>
         <button class="btn" data-result-action="import">Auswahl ohne Tiefen-Screening übernehmen</button>
       </div>
+      <div class="hint">„Weitere Kandidaten suchen" startet einen neuen Lauf, der die oben
+      gefundenen Unternehmen ausschließt — kostet erneut ${fmtAmount(COST_ESTIMATES.longlist[0])}–${fmtAmount(COST_ESTIMATES.longlist[1])}&nbsp;$.</div>
     </div>
   `;
 
@@ -604,14 +747,15 @@ function drawLonglistResults(body) {
 }
 
 function importCandidates(candidates) {
-  const today = new Date().toISOString().slice(0, 10);
+  const duplicates = candidates.filter((c) => isExistingLeadName(c.name)).length;
   const importedIds = [];
   for (const cand of candidates) {
     const lead = candidateToLead(cand, profile, { region: params.region, date: today });
     store.saveLead(lead);
     importedIds.push(lead.id);
   }
-  toast(`${importedIds.length} Lead(s) übernommen — Quelle „Screening".`);
+  toast(`${importedIds.length} Lead(s) übernommen — Quelle „Screening".${
+    duplicates > 0 ? ` ${duplicates} davon tragen den Namen bestehender Leads.` : ''}`);
   queue = importedIds;
   position = 0;
   processed = new Set();
@@ -627,6 +771,12 @@ function handleLonglistAction(action, body) {
     drawLonglistResults(body);
     return;
   }
+  if (action === 'more') {
+    if (running) return;
+    body.querySelectorAll('[data-result-action]').forEach((el) => { el.disabled = true; });
+    startLonglist(body, { append: true });
+    return;
+  }
   const chosen = [...result.selected].sort((a, b) => a - b).map((i) => result.candidates[i]);
   if (chosen.length === 0) { toast('Bitte mindestens einen Kandidaten auswählen.'); return; }
   if (action === 'import') {
@@ -636,22 +786,29 @@ function handleLonglistAction(action, body) {
   }
   if (action === 'deep') {
     // Tiefen-Screening nur für Kandidaten des laufenden Laufs (Verfassung III)
-    deepRun = deepRun?.running ? deepRun : { entries: [], running: false, controller: null };
+    deepRun = deepRun?.running ? deepRun : { entries: [], running: false, controllers: new Set() };
     for (const cand of chosen) {
       if (deepRun.entries.some((e) => e.name.trim().toLowerCase() === cand.name.trim().toLowerCase())) continue;
       deepRun.entries.push({
         name: cand.name, website: cand.website, longlistCandidate: cand,
-        status: 'pending', candidate: null, error: '', warnings: [], selected: true,
+        status: 'pending', candidate: null, error: '', warnings: [], selected: !isExistingLeadName(cand.name),
       });
     }
     goToStep(3);
   }
 }
 
+// Trägt bereits ein gespeicherter Lead diesen Namen? Steuert die Vorauswahl bei der
+// Übernahme — bewusstes Anwählen bleibt möglich.
+function isExistingLeadName(name) {
+  const n = String(name || '').trim().toLowerCase();
+  return store.listLeads(profile.id).some((l) => l.name.trim().toLowerCase() === n);
+}
+
 // --- Schritt 3: Tiefen-Screening je Unternehmen (FR-402–406) ---
 
 function drawStep3(body) {
-  if (!deepRun) deepRun = { entries: [], running: false, controller: null };
+  if (!deepRun) deepRun = { entries: [], running: false, controllers: new Set() };
   const apiKey = store.getApiKey();
   const pre = prescreeningCriteria(profile);
 
@@ -661,7 +818,7 @@ function drawStep3(body) {
       <p class="muted">Je Unternehmen läuft eine eigene Recherche über alle
       ${pre.length} Pre-Screening-Kriterien — mit Quelle, Konfidenz (belegt/abgeleitet)
       und Belegdatum je Wert. Werte ohne Quelle werden verworfen.</p>
-      ${apiKey ? '' : `<div class="card"><h2>API-Schlüssel</h2>${keyBlockHtml(null)}</div>`}
+      ${apiKey ? '' : `<div class="card"><h2>API-Schlüssel</h2>${keyBlockHtml()}</div>`}
       <div class="inline-fields">
         <div class="field grow">
           <label for="deep-name">Eigenes Unternehmen prüfen — Name</label>
@@ -689,7 +846,7 @@ function drawStep3(body) {
     }
     deepRun.entries.push({
       name, website, longlistCandidate: null,
-      status: 'pending', candidate: null, error: '', warnings: [], selected: true,
+      status: 'pending', candidate: null, error: '', warnings: [], selected: !isExistingLeadName(name),
     });
     body.querySelector('#deep-name').value = '';
     body.querySelector('#deep-website').value = '';
@@ -712,13 +869,14 @@ function renderDeepControls(body) {
   const total = deepRun.entries.length;
   const cost = estimateDeepCost(pending);
   const apiKey = store.getApiKey();
-  const fmtEur = (v) => String(v.toFixed(2)).replace('.', ',');
+  const batches = Math.ceil(pending / DEEP_CONCURRENCY);
 
   target.innerHTML = `
     ${total > 15 ? '<div class="notice notice-warn">Mehr als 15 Unternehmen — das dauert lange und kostet entsprechend. Empfehlung: 5–10 je Lauf.</div>' : ''}
     ${pending > 0 ? `<p class="muted">Noch ${pending} Unternehmen offen — geschätzt
-      ${fmtEur(cost.min)}–${fmtEur(cost.max)}&nbsp;€ und ca. ${pending * 2}–${pending * 3} Minuten
-      (sequenziell, abbrechbar; Teilergebnisse bleiben erhalten).</p>` : ''}
+      ${fmtAmount(cost.min)}–${fmtAmount(cost.max)}&nbsp;$ und ca. ${batches * 2}–${batches * 3} Minuten
+      (${DEEP_CONCURRENCY} gleichzeitig, abbrechbar; Teilergebnisse bleiben erhalten).</p>` : ''}
+    ${costSummaryHtml()}
     <div class="row-actions">
       <button class="btn" data-deep="back" ${deepRun.running ? 'disabled' : ''}>Zurück zu Schritt 2</button>
       ${deepRun.running
@@ -734,7 +892,7 @@ function renderDeepControls(body) {
       if (el.dataset.deep === 'back') { goToStep(2); return; }
       if (el.dataset.deep === 'abort') {
         deepRun.running = false;
-        deepRun.controller?.abort();
+        deepRun.controllers?.forEach((c) => c.abort());
         return;
       }
       if (el.dataset.deep === 'start') runDeepLoop(body);
@@ -786,23 +944,31 @@ function renderDeepEntries(body) {
   });
 }
 
-async function runDeepLoop(body) {
-  if (deepRun.running) return;
-  deepRun.running = true;
-  renderDeepControls(body);
+function updateDeepStatus(body) {
+  const statusEl = body.querySelector('#deep-status');
+  if (!statusEl) return;
+  if (!deepRun.running) { statusEl.textContent = ''; return; }
+  const active = deepRun.entries.filter((e) => e.status === 'running').map((e) => e.name);
+  const done = deepRun.entries.filter((e) => e.status === 'done' || e.status === 'error').length;
+  statusEl.textContent = active.length > 0
+    ? `${done} von ${deepRun.entries.length} fertig — läuft: ${active.join(', ')} …`
+    : `${done} von ${deepRun.entries.length} fertig …`;
+}
 
-  while (deepRun.running) {
+// Ein Arbeiter je Nebenläufigkeit: greift sich das nächste offene Unternehmen.
+// Die Auswahl läuft synchron vor dem ersten await — zwei Arbeiter können sich
+// denselben Eintrag nicht greifen.
+async function deepWorker(body) {
+  while (deepRun?.running) {
     const entry = deepRun.entries.find((e) => e.status === 'pending');
-    if (!entry) break;
+    if (!entry) return;
     entry.status = 'running';
     renderDeepEntries(body);
-    const idx = deepRun.entries.indexOf(entry) + 1;
-    const statusEl = body.querySelector('#deep-status');
-    if (statusEl) statusEl.textContent = `Unternehmen ${idx} von ${deepRun.entries.length}: ${entry.name} …`;
+    updateDeepStatus(body);
 
     let request;
     try {
-      request = buildDeepScreeningRequest(profile, entry, { region: params.region });
+      request = buildDeepScreeningRequest(profile, entry, { region: params.region, today });
     } catch (e) {
       entry.status = 'error';
       entry.error = e.message;
@@ -810,9 +976,11 @@ async function runDeepLoop(body) {
       continue;
     }
 
-    deepRun.controller = new AbortController();
+    const controller = new AbortController();
+    deepRun.controllers.add(controller);
     try {
-      const { output } = await runScreening(store.getApiKey(), request, () => {}, { signal: deepRun.controller.signal });
+      const { output, usage } = await runScreening(store.getApiKey(), request, () => {}, { signal: controller.signal });
+      trackCost(usage);
       const { candidate, warnings } = parseDeepResult(output, profile, { name: entry.name });
       entry.warnings = warnings;
       if (candidate) {
@@ -827,22 +995,34 @@ async function runDeepLoop(body) {
     } catch (e) {
       if (e.aborted) {
         entry.status = 'pending';               // zurück in die Warteschlange (Teilergebnisse bleiben)
-        break;
+        return;
       }
       entry.status = 'error';
       entry.error = e.message;
       if (e.message.includes('Rate-Limit')) {   // 429: Lauf pausieren, kein Auto-Retry (Kosten)
         deepRun.running = false;
       }
+    } finally {
+      deepRun.controllers.delete(controller);
     }
     renderDeepEntries(body);
     renderDeepResults(body);
+    updateDeepStatus(body);
   }
+}
+
+async function runDeepLoop(body) {
+  if (deepRun.running) return;
+  deepRun.running = true;
+  deepRun.controllers = new Set();
+  renderDeepControls(body);
+
+  const workers = Array.from({ length: DEEP_CONCURRENCY }, () => deepWorker(body));
+  await Promise.all(workers);
 
   deepRun.running = false;
-  deepRun.controller = null;
-  const statusEl = body.querySelector('#deep-status');
-  if (statusEl) statusEl.textContent = '';
+  deepRun.controllers = new Set();
+  updateDeepStatus(body);
   renderDeepControls(body);
   renderDeepEntries(body);
   renderDeepResults(body);
@@ -856,11 +1036,12 @@ function confidenceBadge(conf) {
 
 function renderDeepResults(body) {
   const target = body.querySelector('#deep-results');
-  if (!target) return;
+  if (!target || !deepRun) return;
   const done = deepRun.entries.filter((e) => e.status === 'done');
   if (done.length === 0) { target.innerHTML = ''; return; }
 
   const pre = prescreeningCriteria(profile);
+  let staleTotal = 0;
   const cards = done.map((entry) => {
     const cand = entry.candidate;
     const ev = evaluate(profile, candidateToLead(cand, profile));
@@ -872,16 +1053,20 @@ function renderDeepResults(body) {
       else label = esc(fmtValue(v));
       const src = cand.valueSources[c.id]
         ? ` <a href="${esc(cand.valueSources[c.id])}" target="_blank" rel="noopener noreferrer">[Quelle]</a>` : '';
-      const date = cand.evidenceDates?.[c.id] ? ` <span class="muted">Stand ${esc(cand.evidenceDates[c.id])}</span>` : '';
-      return `<tr><td>${esc(c.name)}</td><td>${label} ${confidenceBadge(cand.confidence?.[c.id])}${date}${src}</td></tr>`;
+      const evidenceDate = cand.evidenceDates?.[c.id];
+      const date = evidenceDate ? ` <span class="muted">Stand ${esc(evidenceDate)}</span>` : '';
+      if (isEvidenceStale(evidenceDate, today)) staleTotal += 1;
+      return `<tr><td>${esc(c.name)}</td><td>${label} ${confidenceBadge(cand.confidence?.[c.id])}${date}${staleBadge(evidenceDate)}${src}</td></tr>`;
     }).join('');
     const i = deepRun.entries.indexOf(entry);
+    const dup = isExistingLeadName(cand.name);
     return `
       <div class="card">
         <div class="criterion-head">
           <label style="display:flex;align-items:center;gap:var(--space-2)">
             <input type="checkbox" data-deep-select="${i}" ${entry.selected ? 'checked' : ''}>
             <strong>${esc(cand.name)}</strong>
+            ${dup ? '<span class="badge badge-incomplete">evtl. Duplikat</span>' : ''}
           </label>
           ${cand.website ? `<a href="${esc(cand.website)}" target="_blank" rel="noopener noreferrer">${esc(shortUrl(cand.website))}</a>` : ''}
           <span>Vorläufig: ${ev.total === null ? '–' : fmtScore(ev.total)} ${ev.status === 'scored' ? tierBadge(profile, ev.tierId) : ''}
@@ -897,9 +1082,14 @@ function renderDeepResults(body) {
     <h2>Geprüfte Unternehmen (${done.length})</h2>
     <p class="muted">Ohne Übernahme wird nichts gespeichert. Die Qualifizierung (Schritt 4)
     ergänzt danach die nicht recherchierbaren Kriterien.</p>
+    ${staleTotal > 0 ? `<div class="notice notice-warn">${staleTotal} Wert(e) stützen sich auf Belege,
+      die älter als ${EVIDENCE_MAX_AGE_MONTHS} Monate sind — vor der Ansprache gegenprüfen.</div>` : ''}
     ${cards}
     <div class="row-actions" style="margin-bottom: var(--space-4)">
-      <button class="btn btn-primary" data-deep-import>Auswahl übernehmen &amp; weiter zu Schritt 4</button>
+      <button class="btn btn-primary" data-deep-import ${deepRun.running ? 'disabled' : ''}>
+        Auswahl übernehmen &amp; weiter zu Schritt 4
+      </button>
+      ${deepRun.running ? '<span class="muted">Übernahme möglich, sobald der Lauf beendet oder abgebrochen ist.</span>' : ''}
     </div>
   `;
 
@@ -910,6 +1100,7 @@ function renderDeepResults(body) {
     });
   });
   target.querySelector('[data-deep-import]').addEventListener('click', () => {
+    if (deepRun.running) return;
     const chosen = deepRun.entries.filter((e) => e.status === 'done' && e.selected).map((e) => e.candidate);
     if (chosen.length === 0) { toast('Bitte mindestens ein Unternehmen auswählen.'); return; }
     deepRun = null;
@@ -946,8 +1137,9 @@ function drawStep4(body) {
       : fmtValue(value);
     const source = working.sources?.[c.id]
       ? ` <a href="${esc(working.sources[c.id])}" target="_blank" rel="noopener noreferrer">[Quelle]</a>` : '';
-    const date = working.evidenceDates?.[c.id] ? ` <span class="muted">Stand ${esc(working.evidenceDates[c.id])}</span>` : '';
-    return `<tr><td>${esc(c.name)}</td><td>${value === undefined ? '<span class="muted">— nicht belegt —</span>' : esc(label)} ${confidenceBadge(working.confidence?.[c.id])}${date}${source}</td></tr>`;
+    const evidenceDate = working.evidenceDates?.[c.id];
+    const date = evidenceDate ? ` <span class="muted">Stand ${esc(evidenceDate)}</span>` : '';
+    return `<tr><td>${esc(c.name)}</td><td>${value === undefined ? '<span class="muted">— nicht belegt —</span>' : esc(label)} ${confidenceBadge(working.confidence?.[c.id])}${date}${staleBadge(evidenceDate)}${source}</td></tr>`;
   }).join('');
 
   const qualFields = qual.map((c) => {

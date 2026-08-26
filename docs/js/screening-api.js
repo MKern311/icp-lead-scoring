@@ -1,6 +1,8 @@
 // Netzwerkschicht für das Screening — bewusst dünn (contracts/screening.md).
 // Der API-Schlüssel verlässt das Gerät ausschließlich im x-api-key-Header an api.anthropic.com.
 
+import { addUsage } from './core/screening.js';
+
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const MAX_CONTINUATIONS = 6;
 
@@ -26,6 +28,7 @@ async function errorDetail(res) {
 // abbrechbar). Liefert { output, usage } oder wirft mit deutscher Meldung.
 export async function runScreening(apiKey, requestBody, onStatus = () => {}, { signal } = {}) {
   let messages = [...requestBody.messages];
+  let usage = null;   // über alle Fortsetzungen summiert — sonst zählt nur der letzte Request
 
   for (let attempt = 0; attempt <= MAX_CONTINUATIONS; attempt++) {
     onStatus(attempt === 0
@@ -57,6 +60,7 @@ export async function runScreening(apiKey, requestBody, onStatus = () => {}, { s
     if (!res.ok) throw new Error(mapHttpError(res.status, await errorDetail(res)));
 
     const data = await res.json();
+    usage = addUsage(usage, data.usage);
 
     if (data.stop_reason === 'refusal') {
       throw new Error('Die Anfrage wurde vom Dienst abgelehnt. Bitte Kriterien oder Hinweise anpassen.');
@@ -69,7 +73,7 @@ export async function runScreening(apiKey, requestBody, onStatus = () => {}, { s
     const textBlock = [...(data.content || [])].reverse().find((b) => b.type === 'text' && b.text);
     if (!textBlock) throw new Error('Der Dienst lieferte keine auswertbare Antwort.');
     try {
-      return { output: JSON.parse(textBlock.text), usage: data.usage || null };
+      return { output: JSON.parse(textBlock.text), usage };
     } catch {
       throw new Error('Die Antwort konnte nicht als JSON gelesen werden — bitte erneut versuchen.');
     }

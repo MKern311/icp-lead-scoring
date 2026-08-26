@@ -9,8 +9,22 @@ import { createLead } from './model.js';
 export const SCREENING_MODEL = 'claude-opus-5';
 export const LONGLIST_MAX_SEARCHES = 25;
 export const DEEP_MAX_SEARCHES = 12;
-// Grobe Richtwerte in EUR (Anzeige, keine Abrechnung)
-export const COST_ESTIMATES = { longlist: [0.3, 0.8], deepPerCompany: [0.15, 0.35] };
+// Zwei Firmen gleichzeitig: halbiert die Wartezeit, bleibt weit unter dem Rate-Limit.
+export const DEEP_CONCURRENCY = 2;
+// Grobe Richtwerte in USD — Abrechnungswährung der API (Anzeige, keine Abrechnung)
+export const COST_ESTIMATES = { longlist: [0.35, 0.9], deepPerCompany: [0.15, 0.4] };
+// Listenpreise claude-opus-5 (USD je 1 Mio. Token) + Websuche (USD je 1.000 Suchen).
+// Cache-Faktoren gemäß Anthropic-Preisliste; diese Requests cachen nicht, defensiv trotzdem.
+export const PRICING = {
+  currency: 'USD',
+  inputPerMTok: 5,
+  outputPerMTok: 25,
+  cacheWriteFactor: 1.25,
+  cacheReadFactor: 0.1,
+  webSearchPer1000: 10,
+};
+// Belege älter als 12 Monate gelten als veraltet (Belegzeitraum der Wachstumssignale).
+export const EVIDENCE_MAX_AGE_MONTHS = 12;
 
 export function prescreeningCriteria(profile) {
   return profile.criteria.filter((c) => c.stage === 'prescreening');
@@ -21,6 +35,62 @@ export function prescreeningCriteria(profile) {
 // ungeeignet).
 export function longlistCriteria(profile) {
   return prescreeningCriteria(profile).filter((c) => c.type === 'select');
+}
+
+// --- Datum & Beleg-Alter ---
+
+// Heutiges Datum als JJJJ-MM-TT (lokale Zeitzone). Einziger nicht-deterministische
+// Punkt des Moduls; alle Funktionen nehmen das Datum als Parameter entgegen.
+export function todayIso() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+const monthIndex = (s) => {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])/.exec(String(s || ''));
+  return m ? Number(m[1]) * 12 + Number(m[2]) : null;
+};
+
+// Ist der Beleg älter als maxMonths? Pure — beide Daten werden übergeben.
+// Unbekannte oder ungültige Daten gelten nie als veraltet (keine Falschmeldung).
+export function isEvidenceStale(evidenceDate, today, maxMonths = EVIDENCE_MAX_AGE_MONTHS) {
+  const from = monthIndex(evidenceDate);
+  const to = monthIndex(today);
+  if (from === null || to === null) return false;
+  return to - from > maxMonths;
+}
+
+// --- Kosten (Anzeige) ---
+
+const posNum = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+
+// Summiert zwei usage-Objekte der API — nötig, weil ein Lauf mit pause_turn aus
+// mehreren Requests besteht und jeder sein eigenes usage liefert.
+export function addUsage(a, b) {
+  const sum = (k) => posNum(a?.[k]) + posNum(b?.[k]);
+  return {
+    input_tokens: sum('input_tokens'),
+    output_tokens: sum('output_tokens'),
+    cache_creation_input_tokens: sum('cache_creation_input_tokens'),
+    cache_read_input_tokens: sum('cache_read_input_tokens'),
+    server_tool_use: {
+      web_search_requests: posNum(a?.server_tool_use?.web_search_requests)
+        + posNum(b?.server_tool_use?.web_search_requests),
+    },
+  };
+}
+
+// Tatsächliche Kosten eines Laufs aus dem usage-Objekt (USD). Wirft nie.
+export function usageCost(usage) {
+  const searches = posNum(usage?.server_tool_use?.web_search_requests);
+  const input = (posNum(usage?.input_tokens)
+    + posNum(usage?.cache_creation_input_tokens) * PRICING.cacheWriteFactor
+    + posNum(usage?.cache_read_input_tokens) * PRICING.cacheReadFactor) / 1e6 * PRICING.inputPerMTok;
+  const output = posNum(usage?.output_tokens) / 1e6 * PRICING.outputPerMTok;
+  const search = searches / 1000 * PRICING.webSearchPer1000;
+  const round4 = (x) => Math.round(x * 10000) / 10000;
+  return { input: round4(input), output: round4(output), search: round4(search), total: round4(input + output + search), searches };
 }
 
 const key = (index) => `k${index + 1}`;
@@ -153,8 +223,19 @@ Regeln:
 - evidenceDate: Stand des Belegs im Format JJJJ-MM, wenn bestimmbar, sonst null.
 - summary: 1–2 deutsche Sätze zum Unternehmen; sources: die wichtigsten Quell-URLs (mindestens eine).`;
 
+// Datumszeile: ohne sie legt das Modell den Bezugspunkt für „letzte 12 Monate"
+// selbst fest und datiert Belege falsch (FR-408).
+const MAX_EXCLUDED = 150;
+function dateLine(today) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(today || ''))
+    ? `Heutiges Datum: ${today}. Zeitangaben wie „in den letzten 12 Monaten" oder „aktuell" beziehen sich immer auf dieses Datum.\n\n`
+    : '';
+}
+
 // Longlist (SC-401): nur Auswahl-Kriterien, Präferenzen als harte Filter.
-export function buildLonglistRequest(profile, { region = 'DACH', count = 20, hints = '' } = {}) {
+// `exclude` = Namen bereits gefundener Kandidaten desselben Laufs (FR-409); der
+// Aufrufer darf hier niemals gespeicherte Leads übergeben (Verfassung III).
+export function buildLonglistRequest(profile, { region = 'DACH', count = 20, hints = '', today = todayIso(), exclude = [] } = {}) {
   const criteria = longlistCriteria(profile);
   if (criteria.length === 0) {
     throw new Error('Kein Auswahl-Kriterium im Pre-Screening — bitte zuerst ein Auswahlfeld (z. B. Branche oder Unternehmensgröße) aus dem Katalog übernehmen.');
@@ -162,11 +243,19 @@ export function buildLonglistRequest(profile, { region = 'DACH', count = 20, hin
   const n = Math.min(50, Math.max(5, Math.round(count) || 20));
   const lines = criteria.map((c, i) => criterionLine(c, i, { targetsAsFilter: true })).join('\n');
 
-  const userText = `Finde ${n} Unternehmen in der Region ${region}, die zu folgendem Suchprofil passen.
+  const excluded = (Array.isArray(exclude) ? exclude : [])
+    .filter((name) => typeof name === 'string' && name.trim())
+    .map((name) => name.trim().slice(0, 120))
+    .slice(0, MAX_EXCLUDED);
+  const excludeBlock = excluded.length > 0
+    ? `\nDiese Unternehmen sind bereits gefunden — schlage sie NICHT erneut vor (auch keine Schreibvarianten desselben Unternehmens):\n${excluded.map((name) => `- ${name}`).join('\n')}\n`
+    : '';
+
+  const userText = `${dateLine(today)}Finde ${n} Unternehmen in der Region ${region}, die zu folgendem Suchprofil passen.
 
 Kriterien (Schlüssel wie im Ausgabeformat):
 ${lines}
-${hints.trim() ? `\nZusätzliche Hinweise: ${hints.trim()}` : ''}
+${excludeBlock}${hints.trim() ? `\nZusätzliche Hinweise: ${hints.trim()}` : ''}
 Recherchiere mit der Websuche und liefere das Ergebnis exakt im vorgegebenen JSON-Format. Antworte auf Deutsch.`;
 
   return {
@@ -180,7 +269,7 @@ Recherchiere mit der Websuche und liefere das Ergebnis exakt im vorgegebenen JSO
 }
 
 // Deep (SC-402): genau ein Unternehmen — nur name/website/Region + Pre-Screening-Kriterien.
-export function buildDeepScreeningRequest(profile, { name, website = null } = {}, { region = '' } = {}) {
+export function buildDeepScreeningRequest(profile, { name, website = null } = {}, { region = '', today = todayIso() } = {}) {
   const criteria = prescreeningCriteria(profile);
   if (criteria.length === 0) {
     throw new Error('Keine Pre-Screening-Kriterien im Profil — bitte zuerst Kriterien als „Pre-Screening" markieren.');
@@ -191,7 +280,7 @@ export function buildDeepScreeningRequest(profile, { name, website = null } = {}
   const lines = criteria.map((c, i) => criterionLine(c, i)).join('\n');
   const site = typeof website === 'string' && website.trim() ? website.trim() : null;
 
-  const userText = `Recherchiere genau dieses eine Unternehmen:
+  const userText = `${dateLine(today)}Recherchiere genau dieses eine Unternehmen:
 
 Unternehmen: ${name.trim()}${site ? `\nWebsite: ${site}` : ''}${region ? `\nRegion (Kontext): ${region}` : ''}
 

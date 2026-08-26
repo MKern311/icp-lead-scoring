@@ -9,14 +9,17 @@ und `specs/003-guided-workflow/contracts/workflow.md`.
 
 ```js
 longlistCriteria(profile) → Criterion[]                 // stage=prescreening && type=select
-buildLonglistRequest(profile, { region, count, hints }) → requestBody
-buildDeepScreeningRequest(profile, { name, website }, { region }) → requestBody
+buildLonglistRequest(profile, { region, count, hints, today, exclude }) → requestBody
+buildDeepScreeningRequest(profile, { name, website }, { region, today }) → requestBody
 parseCandidates(output, profile) → { candidates, warnings }        // Longlist (wie 002)
 parseDeepResult(output, profile, { name }) → { candidate|null, warnings }
 mergeDeepIntoCandidate(longlistCand, deepCand) → candidate
 candidateToLead(candidate, profile, meta) → lead        // + confidence/evidenceDates
-estimateDeepCost(n) → { min, max }                      // EUR, COST_ESTIMATES
+estimateDeepCost(n) → { min, max }                      // USD, COST_ESTIMATES
 ```
+
+**Feature 005** ergänzt Bezugsdatum, Ausschlussliste, Beleg-Alter und Ist-Kosten —
+Regeln in `specs/005-research-quality/contracts/research-quality.md`.
 
 `buildScreeningRequest` (002/003) entfällt — Longlist ersetzt den Sammellauf.
 
@@ -90,16 +93,20 @@ estimateDeepCost(n) → { min, max }                      // EUR, COST_ESTIMATES
 
 - `runScreening(apiKey, body, onStatus, { signal })`: `signal` wird an `fetch`
   durchgereicht; Abbruch ⇒ Error mit `aborted: true` und deutscher Meldung
-  („Recherche abgebrochen."). Übrige Fehler-Mappings wie 002.
-- Deep-Ausführung (UI): sequenziell, ein Unternehmen nach dem anderen; Zustand
-  flüchtig (`{ entries, position, running }`); Abbruch beendet den laufenden
-  Request, fertige Firmen bleiben; 429 pausiert den Lauf (kein Auto-Retry);
-  „Erneut versuchen" je Firma. Deep nur für Kandidaten des laufenden Laufs oder
-  manuell eingegebene Firmen — nie für gespeicherte Leads (Verfassung III).
+  („Recherche abgebrochen."). Übrige Fehler-Mappings wie 002. Rückgabe
+  `{ output, usage }`, `usage` über alle `pause_turn`-Fortsetzungen summiert (005).
+- Deep-Ausführung (UI): `DEEP_CONCURRENCY = 2` Firmen gleichzeitig (005; vorher
+  sequenziell), Zustand flüchtig (`{ entries, running, controllers }`); Abbruch
+  beendet alle laufenden Requests, fertige Firmen bleiben; 429 pausiert den Lauf
+  (kein Auto-Retry); „Erneut versuchen" je Firma. Deep nur für Kandidaten des
+  laufenden Laufs oder manuell eingegebene Firmen — nie für gespeicherte Leads
+  (Verfassung III).
 
 ## K: Kosten
 
-- `COST_ESTIMATES = { longlist: [0.3, 0.8], deepPerCompany: [0.15, 0.35] }` (EUR,
-  grobe Richtwerte); `estimateDeepCost(n)` = n × Spanne, auf 2 Nachkommastellen.
+- `COST_ESTIMATES = { longlist: [0.35, 0.9], deepPerCompany: [0.15, 0.4] }` (**USD**
+  — Abrechnungswährung der API, seit 005; grobe Richtwerte); `estimateDeepCost(n)`
+  = n × Spanne, auf 2 Nachkommastellen.
 - UI zeigt Schätzung vor jedem Start; ab 15 Firmen Warnhinweis (Empfehlung 5–10,
-  ~2–3 Min./Firma).
+  ~2–3 Min. je Zweiergruppe). Nach jedem Lauf zusätzlich die **tatsächlichen**
+  Kosten aus `usage` (005, siehe Feature-005-Contract).

@@ -1,54 +1,154 @@
-/* Reset & Grundlagen */
+/* Reset & Design-Fundament
+   Marke: manuelkern.com — Tokens aus `app/globals.css` (@theme) und dem Design-
+   Leitbild „Calm Editorial + Physical Motion" (docs/2026-08-10_design-modernisierungs-
+   plan_v1.md). Verbindliche Farbdisziplin von dort: Coral ist ausschließlich der
+   primären Aktion und dem Fokus-Ring vorbehalten, alles andere trägt Indigo oder
+   Muted. Dichte-Stufe „Dashboard" (ui-ux-pro-max), weil dieses Tool Tabellen und
+   Formulare zeigt, keine Marketingflächen. */
+
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Schriften lokal — keine externen Requests, damit der Offline-Kern trägt
+   (Verfassung III). Latin-Subset inkl. Umlaute und deutscher Anführungszeichen. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../fonts/archivo-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../fonts/inter-latin.woff2') format('woff2');
+}
+/* Metrisch angeglichene Fallbacks — verhindern den Sprung beim Nachladen (CLS) */
+@font-face {
+  font-family: 'Archivo Fallback';
+  src: local('Arial');
+  ascent-override: 88.96%; descent-override: 21.28%; line-gap-override: 0%; size-adjust: 98.7%;
+}
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial');
+  ascent-override: 90.44%; descent-override: 22.52%; line-gap-override: 0%; size-adjust: 107.12%;
+}
+
 :root {
-  --color-bg: #f6f7f9;
-  --color-surface: #ffffff;
-  --color-border: #d8dde3;
-  --color-text: #1c2733;
-  --color-text-muted: #5b6b7b;
-  --color-primary: #1f5fa8;
-  --color-primary-dark: #174a84;
-  --color-danger: #b3372f;
-  --color-warn-bg: #fdf3d7;
-  --color-warn-border: #e4c65e;
-  --color-ok: #2e7d4f;
-  --color-badge-a: #2e7d4f;
-  --color-badge-b: #b07d1e;
-  --color-badge-c: #5b6b7b;
-  --color-disqualified: #b3372f;
-  --radius: 8px;
-  --shadow: 0 1px 3px rgba(20, 30, 40, 0.12);
+  /* Marke */
+  --color-primary: #292C87;          /* Indigo — Überschriften, Links, Struktur */
+  --color-primary-dark: #1e2066;
+  --color-primary-soft: rgba(41, 44, 135, 0.08);
+  --color-accent: #D93D29;           /* Coral — NUR primäre Aktion + Fokus-Ring */
+  --color-accent-dark: #C13422;
+  --color-navy: #0f1140;
+
+  /* Flächen & Text (navy-getönte Neutrals) */
+  --color-bg: #F5F6FB;               /* Seitengrund */
+  --color-surface: #ffffff;          /* Karten, Tabellen */
+  --color-text: #16182c;
+  --color-text-muted: #5D6170;
+  --color-border: #E6E7F0;
+
+  /* Status — gedeckt gehalten, damit sie neben Coral nicht konkurrieren */
+  --color-ok: #1F7A4D;
+  --color-danger: #A32718;
+  --color-warn-bg: #FDF3E2;
+  --color-warn-border: #E8C99A;
+  --color-warn-text: #8A5A00;
+  --color-badge-a: #1F7A4D;
+  --color-badge-b: #8A5A00;
+  --color-badge-c: #5D6170;
+  --color-disqualified: #A32718;
+
+  /* Typografie */
+  --font-heading: 'Archivo', 'Archivo Fallback', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  --font-body: 'Inter', 'Inter Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+
+  /* Radien: Karten großzügig, Bedienelemente als Pille (wie auf der Website) */
+  --radius: 0.625rem;
+  --radius-card: 1.25rem;
+  --radius-pill: 9999px;
+
+  /* Weiche Tiefe statt harter Kanten */
+  --shadow-card: 0 1px 2px rgba(15, 17, 64, 0.04), 0 10px 30px -12px rgba(15, 17, 64, 0.12);
+  --shadow-card-hover: 0 2px 4px rgba(15, 17, 64, 0.05), 0 24px 48px -16px rgba(15, 17, 64, 0.2);
+  --shadow-btn: 0 10px 24px -8px rgba(217, 61, 41, 0.5);
+  --shadow-nav: 0 8px 30px -12px rgba(15, 17, 64, 0.14);
+
+  /* Abstände — Dashboard-Dichte */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
-  --space-3: 1rem;
-  --space-4: 1.5rem;
-  --space-5: 2.5rem;
+  --space-3: 0.875rem;
+  --space-4: 1.25rem;
+  --space-5: 2rem;
+
+  /* Motion: starke Kurven, UI unter 300 ms, Verlassen schneller als Erscheinen */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-press: 120ms;
+  --dur-hover: 200ms;
+  --dur-reveal: 450ms;
 }
 
 html { font-size: 16px; }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  line-height: 1.5;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.55;
   color: var(--color-text);
   background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
-h1 { font-size: 1.5rem; }
-h2 { font-size: 1.2rem; }
-h3 { font-size: 1rem; }
+/* Überschriften: Grotesk mit negativem Tracking — trägt die Seite, nicht Effekte */
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--color-navy);
+  margin: 0 0 var(--space-3);
+}
+h1 { font-size: 1.75rem; letter-spacing: -0.03em; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 1.0625rem; }
+h4 { font-size: 0.9375rem; }
 
 p { margin: 0 0 var(--space-3); }
 
-a { color: var(--color-primary); }
+a { color: var(--color-primary); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { color: var(--color-primary-dark); }
 
-table { border-collapse: collapse; width: 100%; }
+/* Lange Quell-URLs dürfen die Spalte nicht sprengen (Mobile) */
+a, code, .hint, .muted { overflow-wrap: anywhere; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
 th, td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); }
-th { font-weight: 600; color: var(--color-text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
+th {
+  font-weight: 600; color: var(--color-text-muted); font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  background: var(--color-bg);
+}
+tbody tr:last-child td { border-bottom: none; }
 
 input, select, textarea, button { font: inherit; color: inherit; }
 
-:focus-visible { outline: 3px solid rgba(31, 95, 168, 0.45); outline-offset: 1px; }
+/* Fokus: Coral — die zweite und letzte Rolle des Akzents */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

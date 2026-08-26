@@ -14,6 +14,62 @@ export function render(section) {
   draw();
 }
 
+// Einstiegserklärung (FR-414): Wer das Tool zum ersten Mal öffnet, sieht zuerst,
+// wie es funktioniert. Sobald Profile existieren, klappt der Block zusammen —
+// die Erklärung bleibt erreichbar, nimmt aber keinen Platz mehr weg.
+const INTRO_STEPS = [
+  {
+    title: 'Wunschkunden-Profil definieren',
+    text: 'Kriterien festlegen, gewichten, K.-o.-Kriterien markieren und Stufen wie A/B/C bestimmen. Vorlagen liefern einen Startpunkt, den Sie frei anpassen.',
+  },
+  {
+    title: 'Kandidaten finden',
+    text: 'Die Online-Recherche sucht Unternehmen, die zu Ihren Klassen-Filtern passen — Branche, Größe, Region. Jeder Treffer kommt mit Quellenangabe.',
+  },
+  {
+    title: 'Tiefen-Screening',
+    text: 'Jedes ausgewählte Unternehmen wird einzeln geprüft: belegter Wert, Quelle, Konfidenz und Belegdatum je Kriterium. Werte ohne Quelle werden verworfen.',
+  },
+  {
+    title: 'Qualifizieren und priorisieren',
+    text: 'Was erst im Gespräch zu erfahren ist — Budget, Zeithorizont, Entscheider-Zugang — ergänzen Sie geführt Lead für Lead. Die Rangliste sortiert nach Punktzahl.',
+  },
+];
+
+function introBlock(hasProfiles) {
+  const inner = `
+    <p class="intro-lead">Sie beschreiben einmal, was einen guten Kunden ausmacht. Das Tool
+    recherchiert dazu passende Unternehmen, belegt jede Angabe mit einer Quelle und rechnet
+    daraus eine Punktzahl, die Sie Kriterium für Kriterium nachvollziehen können.</p>
+    <ol class="intro-steps">
+      ${INTRO_STEPS.map((s, i) => `
+        <li class="intro-step">
+          <span class="num" aria-hidden="true">${i + 1}</span>
+          <h3>${esc(s.title)}</h3>
+          <p>${esc(s.text)}</p>
+        </li>`).join('')}
+    </ol>
+    <div class="intro-facts">
+      <span><strong>Lokal:</strong> alle Daten bleiben in diesem Browser — kein Konto, kein Server.</span>
+      <span><strong>Nachvollziehbar:</strong> Punkte entstehen aus Ihren Regeln, die Recherche liefert nur Rohwerte mit Quellen.</span>
+      <span><strong>Optional:</strong> die Online-Recherche braucht einen eigenen Anthropic-API-Schlüssel.</span>
+    </div>`;
+
+  if (!hasProfiles) {
+    return `
+      <div class="intro-card">
+        <span class="eyebrow">So arbeitet das Tool</span>
+        <h2>Vom Wunschkunden-Profil zur belegten Rangliste</h2>
+        ${inner}
+      </div>`;
+  }
+  return `
+    <details class="intro-card intro-collapsed">
+      <summary>So arbeitet das Tool — die vier Schritte im Überblick</summary>
+      ${inner}
+    </details>`;
+}
+
 function draw() {
   const profiles = store.listProfiles();
   const { activeProfileId } = store.getSettings();
@@ -72,13 +128,16 @@ function draw() {
         <button class="btn" data-action="import">Profil importieren</button>
       </div>
     </div>
-    <div class="card">
+    ${introBlock(profiles.length > 0)}
+    <div class="card ${profiles.length === 0 ? 'card-recommended' : ''}">
+      ${profiles.length === 0 ? '<span class="eyebrow">Empfohlener Einstieg</span>' : ''}
       <h3>Aus Vorlage erstellen</h3>
-      <p class="muted">Vorlagen sind Startpunkte — nach dem Erstellen frei anpassbar.</p>
+      <p class="muted">Vorlagen sind Startpunkte — nach dem Erstellen frei anpassbar.
+      Beide bringen Kriterien mit, die sich online recherchieren lassen.</p>
       ${templateButtons}
     </div>
     ${profiles.length === 0
-      ? '<div class="empty-state">Noch keine Profile. Legen Sie ein neues Profil an oder starten Sie mit einer Vorlage.</div>'
+      ? ''
       : `<div class="table-wrap"><table>
           <thead><tr><th>Profil</th><th class="right">Kriterien</th><th class="right">Leads</th><th>Aktionen</th></tr></thead>
           <tbody>${rows}</tbody>
