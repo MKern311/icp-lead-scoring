@@ -243,6 +243,45 @@ details.intro-collapsed[open] > summary { margin-bottom: var(--space-3); }
 .key-source { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-size: 0.875rem; }
 .key-source .badge-env { background: var(--color-ok); }
 
+/* Kriterien-Übersicht im Profil-Editor (Feature 009): aufklappbare Karte mit
+   Gewichten. Der Dreieck-Marker sitzt am Titel, weil `display:flex` auf summary
+   den Standard-Marker verdrängt. */
+.overview-card > summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: var(--color-navy);
+}
+.overview-card > summary::-webkit-details-marker { display: none; }
+.overview-card[open] > summary { margin-bottom: var(--space-3); }
+.overview-title::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: var(--space-2);
+  color: var(--color-primary);
+  transition: transform var(--dur-hover) var(--ease-out-strong);
+}
+.overview-card[open] .overview-title::before { transform: rotate(90deg); }
+.overview-card > summary .muted { font-family: var(--font-body); font-weight: 400; font-size: 0.875rem; }
+.overview-card td input[type="text"],
+.overview-card td input[type="number"] { margin: 0; }
+.overview-card td { vertical-align: middle; }
+.overview-card th:first-child { width: 38%; }
+.overview-card td input[type="text"] { width: 100%; }
+.overview-card th.center, .overview-card td.center { text-align: center; }
+.overview-card .row-actions { justify-content: flex-end; }
+/* Genug Breite für Name, Typ und vier Schaltflächen — darunter scrollt die
+   Tabelle in ihrem Container, statt Wörter mitten im Wort zu brechen. */
+.overview-card .table-wrap table { min-width: 44rem; }
+.overview-card td.type, .overview-card td.type .hint { white-space: nowrap; overflow-wrap: normal; }
+
 /* Touch-Bedienung (muss nach den Basisregeln stehen, um sie zu überschreiben):
    Ziele auf mindestens 44 px, Kontrollkästchen greifbar. */
 @media (max-width: 800px) {

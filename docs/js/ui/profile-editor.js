@@ -16,6 +16,7 @@ const TYPE_LABELS = {
 let container = null;
 let working = null;
 let isNew = false;
+let overviewOpen = true;      // Zustand der Kriterien-Übersicht, überlebt das Neuzeichnen
 
 export function render(section, params) {
   container = section;
@@ -69,11 +70,13 @@ function draw(messages = null) {
       </div>
     </div>
 
+    ${overviewCard()}
+
     <div class="card">
       <h2>Kriterien</h2>
       <p>
         Gewichtssumme:
-        <span class="weight-sum ${sumOff ? 'off' : ''}" id="weight-sum">${String(sum).replace('.', ',')} %</span>
+        <span class="weight-sum ${sumOff ? 'off' : ''}" data-weight-sum>${String(sum).replace('.', ',')} %</span>
         ${sumOff ? '<button class="btn btn-small" data-action="normalize">Auf 100 normieren</button>' : ''}
       </p>
       ${sumOff ? '<div class="notice notice-warn">Die Gewichtssumme weicht von 100 % ab. Die Bewertung normiert die Gewichte automatisch — für klare Prozentwerte können Sie „Auf 100 normieren" nutzen.</div>' : ''}
@@ -111,7 +114,10 @@ function draw(messages = null) {
   });
   container.querySelectorAll('[data-bind]').forEach((el) => {
     el.addEventListener('change', () => handleBind(el));
-    if (el.type === 'number') el.addEventListener('input', () => handleBind(el, true));
+    if (el.type === 'number' || el.type === 'text') el.addEventListener('input', () => handleBind(el, true));
+  });
+  container.querySelector('.overview-card')?.addEventListener('toggle', (e) => {
+    overviewOpen = e.target.open;
   });
   // Suchpräferenz-Picker (FR-016): Mehrfachauswahl aus den Ausprägungen
   container.querySelectorAll('[data-target]').forEach((el) => {
@@ -127,9 +133,58 @@ function draw(messages = null) {
   });
 }
 
+// Kriterien-Übersicht (Feature 009): Alle Kriterien mit Gewicht auf einen Blick,
+// direkt änderbar und entfernbar. Ein- und ausklappbar, weil sie bei vielen
+// Kriterien sonst die Karten darunter verdrängt; der Zustand überlebt das
+// Neuzeichnen (`overviewOpen`). Name und Gewicht sind hier an dieselben
+// `data-bind`-Felder gebunden wie in der Karte — `syncBoundFields` hält beide
+// Ansichten gleich, ohne dass das Tippen den Fokus verliert.
+function overviewCard() {
+  const sum = weightSum(working);
+  const sumOff = Math.abs(sum - 100) > 0.001;
+  const count = working.criteria.length;
+
+  const rows = working.criteria.map((c, i) => `
+    <tr>
+      <td><input type="text" maxlength="80" data-bind="c:${c.id}:name" value="${esc(c.name)}"
+        aria-label="Name des Kriteriums" placeholder="Ohne Namen"></td>
+      <td class="muted type">${TYPE_LABELS[c.type]}<br><span class="hint">${c.stage === 'prescreening' ? 'Pre-Screening' : 'Qualifizierung'}</span></td>
+      <td class="right"><input type="number" min="0" max="100" step="0.1" style="max-width:5.5rem"
+        data-bind="c:${c.id}:weight" value="${esc(c.weight)}" aria-label="Gewicht in Prozent"></td>
+      <td class="center"><input type="checkbox" data-bind="c:${c.id}:knockout"
+        ${c.knockout ? 'checked' : ''} aria-label="K.-o.-Kriterium"></td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn-small" data-action="move-criterion" data-id="${c.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} title="Nach oben">↑</button>
+          <button class="btn btn-small" data-action="move-criterion" data-id="${c.id}" data-dir="1" ${i === count - 1 ? 'disabled' : ''} title="Nach unten">↓</button>
+          <button class="btn btn-small" data-action="focus-criterion" data-id="${c.id}">Punktregeln</button>
+          <button class="btn btn-small" data-action="remove-criterion" data-id="${c.id}">Entfernen</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <details class="card overview-card" ${overviewOpen ? 'open' : ''}>
+      <summary>
+        <span class="overview-title">Übersicht: ${count} ${count === 1 ? 'Kriterium' : 'Kriterien'}</span>
+        <span class="muted">Gewichtssumme <span class="weight-sum ${sumOff ? 'off' : ''}" data-weight-sum>${String(sum).replace('.', ',')} %</span></span>
+      </summary>
+      ${count === 0
+        ? '<div class="empty-state">Noch keine Kriterien — fügen Sie unten das erste hinzu.</div>'
+        : `<div class="table-wrap"><table>
+            <thead><tr><th>Kriterium</th><th>Typ / Phase</th><th class="right">Gewicht %</th><th class="center">K.o.</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>
+          <div class="row-actions" style="margin-top: var(--space-3)">
+            ${sumOff ? '<button class="btn btn-small" data-action="normalize">Auf 100 normieren</button>' : ''}
+            <span class="hint">„Punktregeln" springt zur vollständigen Karte des Kriteriums.</span>
+          </div>`}
+    </details>`;
+}
+
 function criterionCard(c, index) {
   return `
-    <div class="card criterion-card">
+    <div class="card criterion-card" id="crit-${c.id}">
       <div class="criterion-head">
         <span class="badge">${TYPE_LABELS[c.type]}</span>
         <div class="field grow"><label>Name *</label>
@@ -218,6 +273,16 @@ function num(el) {
   return Number.isFinite(v) && el.value !== '' ? v : null;
 }
 
+// Ein Kriterium erscheint zweimal (Übersicht + Karte). Das jeweils andere Feld
+// nachziehen, statt neu zu zeichnen — sonst verliert das Tippen den Fokus.
+function syncBoundFields(el) {
+  container.querySelectorAll(`[data-bind="${el.dataset.bind}"]`).forEach((other) => {
+    if (other === el) return;
+    if (other.type === 'checkbox') other.checked = el.checked;
+    else other.value = el.value;
+  });
+}
+
 function handleBind(el, soft = false) {
   const parts = el.dataset.bind.split(':');
   if (parts[0] === 'name') working.name = el.value;
@@ -253,18 +318,18 @@ function handleBind(el, soft = false) {
     else if (key === 'min') { const v = num(el); if (v !== null) c.rules.min = v; }
     else if (key === 'max') { const v = num(el); if (v !== null) c.rules.max = v; }
   }
+  syncBoundFields(el);
   if (soft) updateWeightSum();
 }
 
 // Gewichtssumme und die davon abhängigen Hinweise nachziehen, ohne neu zu zeichnen
 // (der Fokus soll im bearbeiteten Feld bleiben).
 function updateWeightSum() {
-  const el = container.querySelector('#weight-sum');
-  if (el) {
-    const sum = weightSum(working);
+  const sum = weightSum(working);
+  container.querySelectorAll('[data-weight-sum]').forEach((el) => {
     el.textContent = `${String(sum).replace('.', ',')} %`;
     el.classList.toggle('off', Math.abs(sum - 100) > 0.001);
-  }
+  });
   const reach = container.querySelector('#tier-reach');
   if (reach) reach.innerHTML = scoreRangeHtml(working);
   container.querySelectorAll('[data-point-range-for]').forEach((hint) => {
@@ -295,6 +360,14 @@ async function handleAction(dataset) {
       const type = container.querySelector('#new-criterion-type').value;
       working.criteria.push(createCriterion(type));
       draw();
+      return;
+    }
+    case 'focus-criterion': {
+      const card = container.querySelector(`#crit-${id}`);
+      if (!card) return;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      card.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+      card.querySelector('input, select')?.focus({ preventScroll: true });
       return;
     }
     case 'remove-criterion':
