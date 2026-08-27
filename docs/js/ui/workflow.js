@@ -19,7 +19,7 @@ import {
 import { runScreening } from '../screening-api.js';
 import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue, setLeaveGuard } from '../app.js';
 import { tierBadge } from './lead-form.js';
-import { criterionEditorHtml, bindCriterionEditor, TYPE_LABELS } from './criterion-editor.js';
+import { criterionEditorHtml, bindCriterionEditor, scoreRangeHtml, scoreScaleLabel, TYPE_LABELS } from './criterion-editor.js';
 
 let container = null;
 let profile = null;
@@ -162,7 +162,10 @@ function weightHintHtml() {
     <button class="btn btn-small" data-action="normalize">Auf 100 % normieren</button>`;
 }
 
-function updateWeightHint(body) {
+function updateHeaderHints(body) {
+  const rangeEl = body.querySelector('#wf-score-range');
+  if (rangeEl) rangeEl.innerHTML = scoreRangeHtml(profile);
+
   const el = body.querySelector('#wf-weight-hint');
   if (!el) return;
   el.innerHTML = weightHintHtml();
@@ -342,6 +345,7 @@ function drawStep1(body) {
              <button class="btn btn-small" data-action="confirm-all">Alle ${open.length} bestätigen</button></div>`
         : '<div class="notice notice-ok">Alle Kriterien bestätigt.</div>'}
       <div class="row-actions" id="wf-weight-hint">${weightHintHtml()}</div>
+      <div id="wf-score-range">${scoreRangeHtml(profile)}</div>
       <p class="hint">Über „Anpassen" ändern Sie Name, Beschreibung, Gewicht, K.-o.-Status und die
       Ausprägungen samt Punkten — dieselben Regeln wie im Profil-Editor, nur ohne den Umweg.</p>
     </div>
@@ -454,7 +458,7 @@ function drawStep1(body) {
       store.saveProfile(profile);
       confirmed.add(c.id);          // wer anpasst, hat entschieden
       if (needsRedraw) { readParams(body); draw(); }
-      else updateWeightHint(body);
+      else updateHeaderHints(body);
     });
   });
   body.querySelector('[data-action="normalize"]')?.addEventListener('click', () => {
@@ -1329,7 +1333,7 @@ function updateStep4Score(body, working) {
     <h2>Bewertung</h2>
     <div>${badges.join(' ')}</div>
     <div class="score-value ${ev.status === 'disqualified' ? 'muted' : ''}">${ev.total === null ? '–' : fmtScore(ev.total)}</div>
-    <div class="score-sub">von 100 Punkten</div>
+    <div class="score-sub">${scoreScaleLabel(profile)}</div>
     <p class="hint" style="text-align:left">Die Bewertung aktualisiert sich live. Den vollständigen
     Kriterien-Breakdown zeigt die <a href="#/lead/${esc(working.id)}">Lead-Einzelansicht</a>.</p>
   `;

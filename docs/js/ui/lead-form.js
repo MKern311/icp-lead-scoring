@@ -6,6 +6,7 @@ import { createLead } from '../core/model.js';
 import { evaluate } from '../core/scoring.js';
 import { isEvidenceStale, todayIso, EVIDENCE_MAX_AGE_MONTHS } from '../core/screening.js';
 import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue } from '../app.js';
+import { scoreScaleLabel } from './criterion-editor.js';
 
 let container = null;
 let profile = null;
@@ -215,7 +216,7 @@ function updateScore() {
     <h2>Bewertung</h2>
     <div>${statusBadges.join(' ')} ${result.status === 'scored' ? tierBadge(profile, result.tierId) : ''}</div>
     <div class="score-value ${result.status === 'disqualified' ? 'muted' : ''}">${result.total === null ? '–' : fmtScore(result.total)}</div>
-    <div class="score-sub">von 100 Punkten</div>
+    <div class="score-sub">${scoreScaleLabel(profile)}</div>
     ${explanation}
     <div class="table-wrap" style="text-align:left">
       <table>

@@ -2,7 +2,7 @@
 // Sortierung/Filter (FR-009) und CSV-Export für deutsches Excel (contracts/csv-format.md).
 
 import * as store from '../store.js';
-import { evaluate } from '../core/scoring.js';
+import { evaluate, scoreRange } from '../core/scoring.js';
 import { serialize } from '../core/csv.js';
 import { esc, toast, navigate, download, slugify, fmtScore, fmtValue } from '../app.js';
 import { tierBadge } from './lead-form.js';
@@ -74,6 +74,11 @@ function draw() {
       <td class="muted">${lead.source === 'csv' ? 'Import' : lead.source === 'screening' ? 'Screening' : 'manuell'}</td>
     </tr>`).join('');
 
+  // Erreichbare Spanne nennen (Feature 008): Ohne sie lässt sich nicht einordnen,
+  // ob 62 Punkte nah am Maximum liegen oder weit davon entfernt.
+  const range = scoreRange(profile);
+  const reachLabel = range ? ` · erreichbar ${fmtValue(range.min)} bis ${fmtValue(range.max)} Punkte` : '';
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Rangliste</h1>
@@ -83,7 +88,7 @@ function draw() {
         <button class="btn btn-primary" data-action="new">Neuer Lead</button>
       </div>
     </div>
-    <p class="muted">Profil: <strong>${esc(profile.name)}</strong> — ${all.length} Lead(s)${incompleteCount > 0 ? `, davon ${incompleteCount} unvollständig` : ''}</p>
+    <p class="muted">Profil: <strong>${esc(profile.name)}</strong> — ${all.length} Lead(s)${incompleteCount > 0 ? `, davon ${incompleteCount} unvollständig` : ''}${reachLabel}</p>
     <div class="inline-fields" style="margin-bottom: var(--space-3)">
       <div class="field">
         <label for="sort-select">Sortierung</label>

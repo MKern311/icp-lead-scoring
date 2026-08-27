@@ -4,6 +4,7 @@
 import * as store from '../store.js';
 import { createProfile, createCriterion, createTier, validateProfile, weightSum, normalizeWeights, uuid, CRITERION_TYPES } from '../core/model.js';
 import { esc, toast, confirmDialog, navigate, refreshActiveProfileIndicator } from '../app.js';
+import { scoreRangeHtml, pointRangeText } from './criterion-editor.js';
 
 const TYPE_LABELS = {
   select: 'Auswahlliste',
@@ -92,6 +93,7 @@ function draw(messages = null) {
     <div class="card">
       <h2>Stufen</h2>
       <p class="muted">Leads werden der ersten Stufe zugeordnet, deren Schwellenwert sie erreichen. Eine Auffangstufe mit Schwellenwert 0 ist Pflicht.</p>
+      <div id="tier-reach">${scoreRangeHtml(working)}</div>
       ${working.tiers.map((t) => `
         <div class="inline-fields" style="margin-bottom: var(--space-2)">
           <div class="field"><label>Bezeichnung</label>
@@ -163,6 +165,9 @@ function criterionCard(c, index) {
     </div>`;
 }
 
+// Punktspanne des Kriteriums (Feature 008) — live nachgezogen, siehe updateWeightSum().
+const pointRangeHint = (c) => `<div class="hint" data-point-range-for="${c.id}">${esc(pointRangeText(c))}</div>`;
+
 function rulesEditor(c) {
   switch (c.type) {
     case 'select':
@@ -174,7 +179,8 @@ function rulesEditor(c) {
             <div class="field" style="max-width:7rem"><input type="number" min="0" max="100" step="1" data-bind="c:${c.id}:opt:${o.id}:points" value="${esc(o.points)}" aria-label="Punkte"></div>
             <button class="btn btn-small" data-action="remove-option" data-id="${c.id}" data-oid="${o.id}">–</button>
           </div>`).join('')}
-        <button class="btn btn-small" data-action="add-option" data-id="${c.id}">Option hinzufügen</button>`;
+        <button class="btn btn-small" data-action="add-option" data-id="${c.id}">Option hinzufügen</button>
+        ${pointRangeHint(c)}`;
     case 'range':
       return `
         <h3>Bereiche &amp; Punkte (0–100, Grenzen inklusive)</h3>
@@ -186,13 +192,15 @@ function rulesEditor(c) {
             <button class="btn btn-small" data-action="remove-range" data-id="${c.id}" data-index="${i}">–</button>
           </div>`).join('')}
         <button class="btn btn-small" data-action="add-range" data-id="${c.id}">Bereich hinzufügen</button>
-        <div class="hint">Werte außerhalb aller Bereiche erhalten 0 Punkte und werden gekennzeichnet.</div>`;
+        <div class="hint">Werte außerhalb aller Bereiche erhalten 0 Punkte und werden gekennzeichnet.</div>
+        ${pointRangeHint(c)}`;
     case 'boolean':
       return `
         <div class="inline-fields">
           <div class="field"><label>Punkte bei Ja</label><input type="number" min="0" max="100" step="1" data-bind="c:${c.id}:yes" value="${esc(c.rules.pointsYes)}"></div>
           <div class="field"><label>Punkte bei Nein</label><input type="number" min="0" max="100" step="1" data-bind="c:${c.id}:no" value="${esc(c.rules.pointsNo)}"></div>
-        </div>`;
+        </div>
+        ${pointRangeHint(c)}`;
     case 'scale':
       return `
         <div class="inline-fields">
@@ -248,12 +256,21 @@ function handleBind(el, soft = false) {
   if (soft) updateWeightSum();
 }
 
+// Gewichtssumme und die davon abhängigen Hinweise nachziehen, ohne neu zu zeichnen
+// (der Fokus soll im bearbeiteten Feld bleiben).
 function updateWeightSum() {
   const el = container.querySelector('#weight-sum');
-  if (!el) return;
-  const sum = weightSum(working);
-  el.textContent = `${String(sum).replace('.', ',')} %`;
-  el.classList.toggle('off', Math.abs(sum - 100) > 0.001);
+  if (el) {
+    const sum = weightSum(working);
+    el.textContent = `${String(sum).replace('.', ',')} %`;
+    el.classList.toggle('off', Math.abs(sum - 100) > 0.001);
+  }
+  const reach = container.querySelector('#tier-reach');
+  if (reach) reach.innerHTML = scoreRangeHtml(working);
+  container.querySelectorAll('[data-point-range-for]').forEach((hint) => {
+    const c = working.criteria.find((x) => x.id === hint.dataset.pointRangeFor);
+    if (c) hint.textContent = pointRangeText(c);
+  });
 }
 
 async function handleAction(dataset) {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createProfile, createCriterion, createTier } from '../docs/js/core/model.js';
-import { evaluate, evaluateAll, round1 } from '../docs/js/core/scoring.js';
+import { evaluate, evaluateAll, round1, criterionPointRange, scoreRange, unreachableTiers } from '../docs/js/core/scoring.js';
 
 // Referenzprofil aus contracts/scoring-engine.md
 function contractProfile(missingValuePolicy = 'neutral') {
@@ -203,4 +203,73 @@ test('Performance: 5000 Leads bewerten und sortieren unter 1 Sekunde', () => {
   const ms = Number(process.hrtime.bigint() - start) / 1e6;
   assert.equal(results.length, 5000);
   assert.ok(ms < 1000, `Dauer ${ms.toFixed(0)} ms überschreitet 1000 ms`);
+});
+
+// --- Erreichbare Punktzahl (Feature 008) ---
+
+test('criterionPointRange: Spanne je Typ, Bereichs-Lücke zählt 0', () => {
+  const { branche, mitarbeiter, budget } = contractProfile();
+  assert.deepEqual(criterionPointRange(branche), { min: 0, max: 100 });
+  // Beide Bereiche geben ≥ 60 Punkte — außerhalb gibt es trotzdem 0 (Regel 1)
+  assert.deepEqual(criterionPointRange(mitarbeiter), { min: 0, max: 100 });
+  assert.deepEqual(criterionPointRange(budget), { min: 0, max: 100 });
+
+  const skala = createCriterion('scale');
+  assert.deepEqual(criterionPointRange(skala), { min: 0, max: 100 });
+
+  const leer = createCriterion('select');
+  leer.rules.options = [];
+  assert.equal(criterionPointRange(leer), null);
+});
+
+test('scoreRange: Referenzprofil erreicht die volle 100', () => {
+  const { p } = contractProfile();
+  assert.deepEqual(scoreRange(p), { min: 0, max: 100 });
+});
+
+test('scoreRange: gedeckelte Ausprägungen senken das Maximum', () => {
+  const { p, branche } = contractProfile();
+  // Beste Branche gibt nur noch 80 Punkte ⇒ 0,4 × 80 + 0,3 × 100 + 0,3 × 100 = 92
+  branche.rules.options = [
+    { id: 'saas', label: 'SaaS', points: 80 },
+    { id: 'handel', label: 'Handel', points: 40 },
+    { id: 'sonstige', label: 'Sonstige', points: 20 },
+  ];
+  const range = scoreRange(p);
+  assert.deepEqual(range, { min: round1(0.4 * 20), max: 92 });
+});
+
+test('scoreRange: dieselbe Normierung wie evaluate — kein Lead übertrifft das Maximum', () => {
+  const { p, branche, mitarbeiter, budget } = contractProfile();
+  branche.rules.options[0].points = 70;
+  const best = lead(p, { [branche.id]: 'saas', [mitarbeiter.id]: 30, [budget.id]: true });
+  const range = scoreRange(p);
+  assert.equal(evaluate(p, best).total, range.max);
+});
+
+test('scoreRange: Gewicht 0 zählt weder im Zähler noch im Nenner', () => {
+  const { p, branche, mitarbeiter, budget } = contractProfile();
+  branche.rules.options[0].points = 50;
+  branche.weight = 0;
+  mitarbeiter.weight = 50;
+  budget.weight = 50;
+  assert.deepEqual(scoreRange(p), { min: 0, max: 100 });
+});
+
+test('scoreRange: ohne bewertbare Gewichte null', () => {
+  const p = createProfile('Leer');
+  assert.equal(scoreRange(p), null);
+  const { p: p2 } = contractProfile();
+  p2.criteria.forEach((c) => { c.weight = 0; });
+  assert.equal(scoreRange(p2), null);
+});
+
+test('unreachableTiers: Schwelle über der Höchstpunktzahl wird gemeldet', () => {
+  const { p, branche } = contractProfile();
+  branche.rules.options[0].points = 50;   // Maximum: 0,4 × 50 + 60 = 80
+  assert.equal(scoreRange(p).max, 80);
+  assert.deepEqual(unreachableTiers(p).map((t) => t.label), []);
+
+  p.tiers = [createTier('Top', 85), createTier('A', 75), createTier('C', 0)];
+  assert.deepEqual(unreachableTiers(p).map((t) => t.label), ['Top']);
 });

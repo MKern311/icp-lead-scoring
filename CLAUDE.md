@@ -23,6 +23,8 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   lokaler `.env` mit Browser-Eingabe als Fallback, Markenauftritt)
 - Feature 007: `specs/007-editing-sharing-access/` (Kriterien im Workflow anpassen
   und entfernen, Profil-Code zum Teilen, Zugangshürde auf der öffentlichen Seite)
+- Feature 008: `specs/008-score-transparency/` (erreichbare Punktzahl je Kriterium und
+  je Profil, Hinweis auf unerreichbare Stufen; Regeln 8–10 im Scoring-Contract)
 
 ## Stack & Regeln
 
@@ -66,7 +68,13 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Zugang: `js/gate.js` lädt `app.js` erst nach Wortprüfung (SHA-256), auf localhost
   sofort. **Keine Sicherheitsgrenze** — alles unter `docs/` ist öffentlich abrufbar;
   Geheimnisse gehören dort niemals hin
-- Tests: `node --test tests/` (Node ≥ 20); Scoring-Regeln sind in
+- Erreichbare Punktzahl: `criterionPointRange`/`scoreRange`/`unreachableTiers` in
+  `core/scoring.js` leiten die Spanne allein aus den Punktregeln ab (100 nur erreichbar,
+  wenn jedes Kriterium eine 100-Punkte-Ausprägung hat). Zur Renderzeit berechnet, nie
+  gespeichert. Gemeinsame Textbausteine (`pointRangeText`, `scoreRangeHtml`) liegen in
+  `ui/criterion-editor.js` und werden von Workflow, Profil-Editor, Lead-Formular und
+  Rangliste genutzt
+- Tests: `node --test tests/*.test.js` (Node ≥ 20); Scoring-Regeln sind in
   `specs/001-icp-lead-scoring/contracts/scoring-engine.md` fixiert — Änderungen dort zuerst
 - UI-Texte deutsch, Code-Bezeichner englisch; Nutzereingaben beim Rendern immer escapen
 - Design folgt manuelkern.com (`app/globals.css` + `docs/2026-08-10_design-modernisierungs-

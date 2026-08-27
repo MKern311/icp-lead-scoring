@@ -117,3 +117,59 @@ export function evaluate(profile, lead) {
 export function evaluateAll(profile, leads) {
   return leads.map((lead) => evaluate(profile, lead));
 }
+
+// --- Erreichbare Punktzahl (Feature 008) ---
+// Die Engine normiert die Gewichte, deshalb sind 100 Punkte nur dann erreichbar,
+// wenn jedes Kriterium eine 100-Punkte-Ausprägung hat. Die Spanne folgt allein aus
+// den Punktregeln — ohne Lead-Daten —, damit beim Definieren von Punkten und
+// Stufenschwellen sichtbar ist, was am Ende überhaupt herauskommen kann.
+
+// Punktspanne eines einzelnen Kriteriums oder null, wenn die Regeln unbrauchbar sind.
+export function criterionPointRange(criterion) {
+  const rules = criterion?.rules || {};
+  const finite = (list) => list.map(Number).filter((n) => Number.isFinite(n));
+  switch (criterion?.type) {
+    case 'select': {
+      const pts = finite((rules.options || []).map((o) => o.points));
+      return pts.length > 0 ? { min: Math.min(...pts), max: Math.max(...pts) } : null;
+    }
+    case 'range': {
+      const pts = finite((rules.ranges || []).map((r) => r.points));
+      // Werte außerhalb aller Bereiche zählen 0 Punkte (Regel 1) — die 0 gehört zur Spanne.
+      return pts.length > 0 ? { min: Math.min(0, ...pts), max: Math.max(...pts) } : null;
+    }
+    case 'boolean': {
+      const pts = finite([rules.pointsYes, rules.pointsNo]);
+      return pts.length === 2 ? { min: Math.min(...pts), max: Math.max(...pts) } : null;
+    }
+    case 'scale':
+      return { min: 0, max: 100 };
+    default:
+      return null;
+  }
+}
+
+// Spanne des Gesamtscores für einen Lead mit vollständigen Werten — dieselbe
+// Gewichtsnormierung wie in `evaluate`. null, wenn nichts bewertbar ist.
+export function scoreRange(profile) {
+  const parts = (profile?.criteria || [])
+    .map((c) => ({ weight: Number(c.weight) || 0, range: criterionPointRange(c) }))
+    .filter((p) => p.range !== null && p.weight > 0);
+  const totalWeight = parts.reduce((acc, p) => acc + p.weight, 0);
+  if (totalWeight <= 0) return null;
+
+  let min = 0;
+  let max = 0;
+  for (const { weight, range } of parts) {
+    min += (weight / totalWeight) * range.min;
+    max += (weight / totalWeight) * range.max;
+  }
+  return { min: round1(min), max: round1(max) };
+}
+
+// Stufen, deren Schwelle über der Höchstpunktzahl liegt — sie könnte niemand erreichen.
+export function unreachableTiers(profile) {
+  const range = scoreRange(profile);
+  if (!range) return [];
+  return (profile?.tiers || []).filter((t) => Number(t.minScore) > range.max);
+}

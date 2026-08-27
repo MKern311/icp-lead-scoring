@@ -67,3 +67,31 @@ Mitarbeiter (range, Gewicht 30; 10–50 = 100, 51–200 = 60), Budget vorhanden
 | L6 | SaaS, 30 MA, Budget — (fehlt) | `not-evaluable` (K.o. ohne Wert) |
 
 Diese Tabelle ist 1:1 als Testfälle in `tests/scoring.test.js` zu implementieren.
+
+## Erreichbare Punktzahl (Feature 008)
+
+Abgeleitete, ebenfalls pure API — sie ändert die Rechenregeln nicht, sondern macht ihre
+Folgen sichtbar. Grund: Regel 2 normiert die Gewichte, deshalb sind 100 Punkte **nur**
+erreichbar, wenn jedes Kriterium eine 100-Punkte-Ausprägung besitzt. Ohne diesen Anker
+lassen sich weder Punktwerte noch Stufenschwellen (Regel 6) sinnvoll setzen.
+
+```js
+criterionPointRange(criterion) → { min, max } | null   // Punktspanne eines Kriteriums
+scoreRange(profile) → { min, max } | null              // Spanne des Gesamtscores
+unreachableTiers(profile) → Tier[]                     // Stufen über dem Maximum
+```
+
+8. **Kriterienspanne**: `select` = Minimum/Maximum über `options[].points`; `range` =
+   `min(0, …ranges[].points)` bis `max(…ranges[].points)` — die 0 gehört dazu, weil Werte
+   außerhalb aller Bereiche nach Regel 1 null Punkte erhalten; `boolean` =
+   Minimum/Maximum aus `pointsYes`/`pointsNo`; `scale` = immer 0–100. Fehlen die Regeln
+   (keine Optionen, keine Bereiche), ist die Spanne `null` und das Kriterium zählt nicht mit.
+9. **Profilspanne**: dieselbe Normierung wie Regel 2, über alle Kriterien mit
+   `weight > 0` und gültiger Spanne: `max = Σ (w_i' × max_i)`, `min = Σ (w_i' × min_i)`,
+   Ausgabe mit `round1`. Gibt es kein solches Kriterium, ist das Ergebnis `null`
+   (analog zu `not-evaluable`). Die Spanne gilt für **vollständige** Leads; bei
+   Policy `neutral` verschiebt ein fehlender Wert die Normierung und kann den Score
+   über `max` heben — die UI benennt die Spanne deshalb als „bei vollständigen Daten".
+10. **Unerreichbare Stufen**: Stufen mit `minScore > max`. Sie sind kein Fehler
+   (die Validierung lehnt nichts ab), aber die UI muss darauf hinweisen — eine solche
+   Stufe bekäme nie einen Lead zugeordnet.
