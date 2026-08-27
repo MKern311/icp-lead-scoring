@@ -21,6 +21,8 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   Regeln fixiert in `contracts/research-quality.md`)
 - Feature 006: `specs/006-onboarding-brand/` (Einstiegserklärung, Schlüssel aus
   lokaler `.env` mit Browser-Eingabe als Fallback, Markenauftritt)
+- Feature 007: `specs/007-editing-sharing-access/` (Kriterien im Workflow anpassen
+  und entfernen, Profil-Code zum Teilen, Zugangshürde auf der öffentlichen Seite)
 
 ## Stack & Regeln
 
@@ -54,7 +56,16 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   (`todayIso()`); die Nachsuche schließt Kandidaten **des laufenden Laufs** per
   `exclude` aus (nie gespeicherte Leads). Beleg-Alter (`isEvidenceStale`, 12 Monate)
   und Kosten (`usageCost`, USD) werden zur Renderzeit berechnet, nie gespeichert;
-  `DEEP_CONCURRENCY = 2` Firmen laufen gleichzeitig.
+  `DEEP_CONCURRENCY = 2` Firmen laufen gleichzeitig. Kriterien lassen sich in
+  Schritt 1 über `ui/criterion-editor.js` anpassen (Name, Gewicht, K.o., Ausprägungen
+  samt Punkten) und entfernen — der Profil-Editor hat dafür historisch eine eigene,
+  gleichwertige Bindung, beide sind bei Änderungen gemeinsam zu prüfen.
+- Profile teilen: `core/profile-code.js` kodiert das Export-Objekt als
+  `ICP1-<base64url(gzip)>` — trägt die Daten selbst, braucht keinen Server, enthält
+  nie Leads oder Schlüssel
+- Zugang: `js/gate.js` lädt `app.js` erst nach Wortprüfung (SHA-256), auf localhost
+  sofort. **Keine Sicherheitsgrenze** — alles unter `docs/` ist öffentlich abrufbar;
+  Geheimnisse gehören dort niemals hin
 - Tests: `node --test tests/` (Node ≥ 20); Scoring-Regeln sind in
   `specs/001-icp-lead-scoring/contracts/scoring-engine.md` fixiert — Änderungen dort zuerst
 - UI-Texte deutsch, Code-Bezeichner englisch; Nutzereingaben beim Rendern immer escapen

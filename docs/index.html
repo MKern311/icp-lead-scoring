@@ -44,6 +44,17 @@
     </div>
   </dialog>
 
-  <script type="module" src="js/app.js"></script>
+  <dialog id="text-dialog">
+    <h2 id="text-dialog-title"></h2>
+    <p id="text-dialog-message" class="muted"></p>
+    <textarea id="text-dialog-value" rows="6" spellcheck="false"></textarea>
+    <div class="dialog-actions">
+      <button type="button" id="text-dialog-copy" class="btn">Kopieren</button>
+      <button type="button" id="text-dialog-cancel" class="btn">Schließen</button>
+      <button type="button" id="text-dialog-ok" class="btn btn-primary">Übernehmen</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/gate.js"></script>
 </body>
 </html>

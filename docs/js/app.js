@@ -59,6 +59,50 @@ export function confirmDialog(message, okLabel = 'Fortfahren') {
   });
 }
 
+
+// Text anzeigen oder einsammeln (Feature 007: Profil-Code). Im Lesemodus steht
+// „Kopieren" bereit, im Schreibmodus wird der eingegebene Text zurückgegeben.
+export function textDialog({ title, message = '', value = '', readOnly = false, okLabel = 'Übernehmen' }) {
+  return new Promise((resolve) => {
+    const dialog = document.getElementById('text-dialog');
+    const field = document.getElementById('text-dialog-value');
+    const okBtn = document.getElementById('text-dialog-ok');
+    const cancelBtn = document.getElementById('text-dialog-cancel');
+    const copyBtn = document.getElementById('text-dialog-copy');
+
+    document.getElementById('text-dialog-title').textContent = title;
+    document.getElementById('text-dialog-message').textContent = message;
+    field.value = value;
+    field.readOnly = readOnly;
+    field.placeholder = readOnly ? '' : 'Code hier einfügen …';
+    okBtn.textContent = okLabel;
+    okBtn.hidden = readOnly;
+    copyBtn.hidden = !readOnly;
+    cancelBtn.textContent = readOnly ? 'Schließen' : 'Abbrechen';
+
+    const done = (result) => {
+      dialog.close();
+      okBtn.onclick = cancelBtn.onclick = copyBtn.onclick = dialog.oncancel = null;
+      resolve(result);
+    };
+    okBtn.onclick = () => done(field.value);
+    cancelBtn.onclick = () => done(null);
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(field.value);
+        toast('Code in die Zwischenablage kopiert.');
+      } catch {
+        field.select();
+        toast('Bitte mit Strg/Cmd + C kopieren.');
+      }
+    };
+    dialog.oncancel = (e) => { e.preventDefault(); done(null); };
+    dialog.showModal();
+    if (!readOnly) field.focus();
+    else field.select();
+  });
+}
+
 export function download(filename, text, mime = 'text/plain') {
   const blob = new Blob([text], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);

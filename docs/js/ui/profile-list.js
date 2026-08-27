@@ -5,7 +5,8 @@ import * as store from '../store.js';
 import { createProfile } from '../core/model.js';
 import { exportProfile, importProfile } from '../core/profile-io.js';
 import { templates } from '../templates.js';
-import { esc, toast, confirmDialog, download, slugify, navigate, refreshActiveProfileIndicator } from '../app.js';
+import { esc, toast, confirmDialog, download, slugify, navigate, refreshActiveProfileIndicator, textDialog } from '../app.js';
+import { encodeProfileCode, decodeProfileCode } from '../core/profile-code.js';
 
 let container = null;
 
@@ -93,6 +94,7 @@ function draw() {
             <button class="btn btn-small" data-action="edit" data-id="${p.id}">Bearbeiten</button>
             <button class="btn btn-small" data-action="duplicate" data-id="${p.id}">Duplizieren</button>
             <button class="btn btn-small" data-action="export" data-id="${p.id}">Exportieren</button>
+            <button class="btn btn-small" data-action="share-code" data-id="${p.id}">Code teilen</button>
             <button class="btn btn-small" data-action="delete" data-id="${p.id}">Löschen</button>
           </div>
         </td>
@@ -126,6 +128,7 @@ function draw() {
       <div class="row-actions">
         <button class="btn btn-primary" data-action="new">Neues Profil</button>
         <button class="btn" data-action="import">Profil importieren</button>
+        <button class="btn" data-action="paste-code">Profil aus Code laden</button>
       </div>
     </div>
     ${introBlock(profiles.length > 0)}
@@ -182,6 +185,51 @@ async function handleAction(action, dataset) {
     case 'duplicate': {
       const copy = store.duplicateProfile(id);
       if (copy) { toast(`Profil „${copy.name}" angelegt.`); draw(); }
+      break;
+    }
+    case 'share-code': {
+      // Profil als Textcode weitergeben (FR-418). Der Code trägt die Daten selbst —
+      // deshalb funktioniert er auch auf statischem Hosting ohne Server.
+      const profile = store.getProfile(id);
+      if (!profile) break;
+      let code;
+      try {
+        code = await encodeProfileCode(exportProfile(profile));
+      } catch {
+        toast('Der Code konnte nicht erzeugt werden.');
+        break;
+      }
+      await textDialog({
+        title: `Profil-Code: ${profile.name}`,
+        message: `Diesen Code kopieren und auf dem anderen Gerät unter „Profil aus Code laden" einfügen. Er enthält Kriterien, Gewichte und Stufen — keine Leads, keinen API-Schlüssel. Länge: ${code.length} Zeichen.`,
+        value: code,
+        readOnly: true,
+      });
+      break;
+    }
+    case 'paste-code': {
+      const input = await textDialog({
+        title: 'Profil aus Code laden',
+        message: 'Fügen Sie den Code ein, den Sie über „Code teilen" erhalten haben. Das Profil wird als neues Profil angelegt — vorhandene bleiben unberührt.',
+        okLabel: 'Profil anlegen',
+      });
+      if (input === null) break;
+      let data;
+      try {
+        data = await decodeProfileCode(input);
+      } catch (e) {
+        toast(e.message);
+        break;
+      }
+      const { profile, errors } = importProfile(data);
+      if (!profile) {
+        toast(`Der Code enthält kein gültiges Profil: ${errors[0] || 'unbekannter Fehler'}`);
+        break;
+      }
+      profile.name = store.uniqueProfileName(profile.name);
+      store.saveProfile(profile);
+      toast(`Profil „${profile.name}" aus Code angelegt.`);
+      draw();
       break;
     }
     case 'export': {

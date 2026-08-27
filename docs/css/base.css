@@ -8,6 +8,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* `hidden` muss auch dort greifen, wo eine Klasse `display` setzt (z. B. .btn) */
+[hidden] { display: none !important; }
+
 /* Schriften lokal — keine externen Requests, damit der Offline-Kern trägt
    (Verfassung III). Latin-Subset inkl. Umlaute und deutscher Anführungszeichen. */
 @font-face {

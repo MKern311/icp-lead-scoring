@@ -7,7 +7,7 @@
 
 import * as store from '../store.js';
 import { evaluate } from '../core/scoring.js';
-import { criterionFromCatalog, profileCatalogFindings } from '../core/model.js';
+import { criterionFromCatalog, profileCatalogFindings, weightSum, normalizeWeights } from '../core/model.js';
 import { criterionCatalog, retiredCriterionNames } from '../templates.js';
 import {
   prescreeningCriteria, longlistCriteria,
@@ -19,12 +19,14 @@ import {
 import { runScreening } from '../screening-api.js';
 import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue, setLeaveGuard } from '../app.js';
 import { tierBadge } from './lead-form.js';
+import { criterionEditorHtml, bindCriterionEditor, TYPE_LABELS } from './criterion-editor.js';
 
 let container = null;
 let profile = null;
 let step = 1;
 let confirmed = new Set();                       // in dieser Sitzung aktiv bestätigte Kriterien
 let keptFindings = new Set();                    // „Behalten"-Entscheidungen der Aufräum-Box (flüchtig)
+let editing = new Set();                         // aufgeklappte Kriterien-Editoren (Schritt 1)
 let params = { region: 'DACH', count: 20, hints: '' };
 let running = false;                             // Longlist-Lauf aktiv
 let result = null;                               // Longlist-Ergebnis { candidates, warnings, region, selected }
@@ -46,6 +48,7 @@ export function render(section) {
     step = 1;
     confirmed = new Set();
     keptFindings = new Set();
+    editing = new Set();
     result = null;
     deepRun = null;
     costLog = null;
@@ -145,6 +148,33 @@ function draw() {
   else drawStep4(body);
 }
 
+
+// Gewichtssumme (Feature 007): Nach dem Entfernen oder Anpassen von Kriterien
+// stimmt sie oft nicht mehr — die Bewertung normiert zwar automatisch, aber der
+// Hinweis macht die Verschiebung sichtbar.
+function weightHintHtml() {
+  const sum = weightSum(profile);
+  if (Math.abs(sum - 100) < 0.001) {
+    return `<span class="muted">Gewichtssumme: <strong>100 %</strong></span>`;
+  }
+  return `<span class="muted">Gewichtssumme: <strong class="weight-sum off">${esc(fmtValue(sum))} %</strong>
+    — die Bewertung normiert automatisch.</span>
+    <button class="btn btn-small" data-action="normalize">Auf 100 % normieren</button>`;
+}
+
+function updateWeightHint(body) {
+  const el = body.querySelector('#wf-weight-hint');
+  if (!el) return;
+  el.innerHTML = weightHintHtml();
+  el.querySelector('[data-action="normalize"]')?.addEventListener('click', () => {
+    normalizeWeights(profile);
+    store.saveProfile(profile);
+    readParams(body);
+    toast('Gewichte auf 100 % normiert.');
+    draw();
+  });
+}
+
 // --- Schritt 1: Phasen-Zuordnung + kategorisierter Katalog (W2, FR-014/015/016) ---
 
 function drawStep1(body) {
@@ -186,22 +216,31 @@ function drawStep1(body) {
             : 'Wonach soll gesucht werden? z. B. bevorzugt 50–250 Mitarbeiter'}">
       </div>`;
     }
+    const isEditing = editing.has(c.id);
     return `
       <div class="card criterion-card ${isConfirmed ? '' : 'unconfirmed'}">
         <div class="criterion-head">
           <div class="field grow">
-            <label>${esc(c.name)}${c.knockout ? ' <span class="badge badge-knockout">K.o.</span>' : ''}</label>
+            <label>${esc(c.name)}
+              <span class="badge badge-type">${esc(TYPE_LABELS[c.type] || c.type)}</span>
+              <span class="muted" style="font-weight:400">${esc(fmtValue(c.weight))} %</span>
+              ${c.knockout ? '<span class="badge badge-knockout">K.o.</span>' : ''}</label>
             ${c.description ? `<div class="hint">${esc(c.description)}</div>` : ''}
           </div>
-          <div class="field" style="max-width:16rem"><label>Screening-Phase</label>
+          <div class="field" style="max-width:15rem"><label>Screening-Phase</label>
             <select data-stage="${c.id}">
               <option value="prescreening" ${c.stage === 'prescreening' ? 'selected' : ''}>Pre-Screening (online recherchierbar)</option>
               <option value="qualification" ${c.stage !== 'prescreening' ? 'selected' : ''}>Qualifizierung (2. Screening)</option>
             </select></div>
-          ${isConfirmed
-            ? '<span class="badge badge-tier-0">✓ bestätigt</span>'
-            : `<button class="btn btn-small" data-confirm="${c.id}">Bestätigen</button>`}
+          <div class="row-actions">
+            <button class="btn btn-small" data-edit="${c.id}">${isEditing ? 'Fertig' : 'Anpassen'}</button>
+            <button class="btn btn-small btn-danger" data-drop="${c.id}">Entfernen</button>
+            ${isConfirmed
+              ? '<span class="badge badge-tier-0">✓ bestätigt</span>'
+              : `<button class="btn btn-small" data-confirm="${c.id}">Bestätigen</button>`}
+          </div>
         </div>
+        ${isEditing ? `<div class="criterion-edit-box">${criterionEditorHtml(c, { includeStage: false })}</div>` : ''}
         ${hintField}
       </div>`;
   };
@@ -301,7 +340,10 @@ function drawStep1(body) {
       ${open.length > 0
         ? `<div class="notice notice-warn">Noch ${open.length} von ${profile.criteria.length} Kriterien unbestätigt.
              <button class="btn btn-small" data-action="confirm-all">Alle ${open.length} bestätigen</button></div>`
-        : '<div class="notice notice-ok" style="background:#e7f3ec;border:1px solid #bcd9c8;border-radius:var(--radius);padding:var(--space-2) var(--space-3)">Alle Kriterien bestätigt.</div>'}
+        : '<div class="notice notice-ok">Alle Kriterien bestätigt.</div>'}
+      <div class="row-actions" id="wf-weight-hint">${weightHintHtml()}</div>
+      <p class="hint">Über „Anpassen" ändern Sie Name, Beschreibung, Gewicht, K.-o.-Status und die
+      Ausprägungen samt Punkten — dieselben Regeln wie im Profil-Editor, nur ohne den Umweg.</p>
     </div>
     ${cleanupBlock}
     <h2>Online recherchierbar — Pre-Screening (${pre.length})</h2>
@@ -375,6 +417,52 @@ function drawStep1(body) {
       readParams(body);
       draw();
     });
+  });
+  // Kriterium anpassen (Feature 007): Editor auf-/zuklappen. Der Zustand liegt in
+  // `editing`, damit ein Neuzeichnen den geöffneten Editor nicht schließt.
+  body.querySelectorAll('[data-edit]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.edit;
+      if (editing.has(id)) editing.delete(id);
+      else editing.add(id);
+      readParams(body);
+      draw();
+    });
+  });
+  body.querySelectorAll('[data-drop]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const c = profile.criteria.find((x) => x.id === el.dataset.drop);
+      if (!c) return;
+      if (profile.criteria.length <= 1) {
+        toast('Ein Profil braucht mindestens ein Kriterium.');
+        return;
+      }
+      if (!await confirmDialog(`Kriterium „${c.name}" aus dem Profil entfernen? Bereits erfasste Werte dieses Kriteriums gehen bei den Leads verloren.`, 'Entfernen')) return;
+      profile.criteria = profile.criteria.filter((x) => x.id !== c.id);
+      confirmed.delete(c.id);
+      editing.delete(c.id);
+      store.saveProfile(profile);
+      toast(`„${c.name}" entfernt. Prüfen Sie die Gewichtung.`);
+      draw();
+    });
+  });
+  // Felder des aufgeklappten Editors an das Profil binden
+  body.querySelectorAll('.criterion-editor').forEach((root) => {
+    const c = profile.criteria.find((x) => x.id === root.dataset.ceditFor);
+    if (!c) return;
+    bindCriterionEditor(root, c, (needsRedraw) => {
+      store.saveProfile(profile);
+      confirmed.add(c.id);          // wer anpasst, hat entschieden
+      if (needsRedraw) { readParams(body); draw(); }
+      else updateWeightHint(body);
+    });
+  });
+  body.querySelector('[data-action="normalize"]')?.addEventListener('click', () => {
+    normalizeWeights(profile);
+    store.saveProfile(profile);
+    readParams(body);
+    toast('Gewichte auf 100 % normiert.');
+    draw();
   });
   body.querySelector('[data-action="confirm-all"]')?.addEventListener('click', () => {
     // Sammelbestätigung: die vorgeschlagene Phase jedes Kriteriums wird übernommen.
