@@ -29,6 +29,8 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   Profil-Editor: Gewichte mit Summenzeile, K.o., Reihenfolge, Entfernen, Sortierung)
 - Feature 010: `specs/010-backup/` (Vollsicherung Profil + Leads in einer Datei;
   Format fixiert in `contracts/backup-format.md`)
+- Feature 011: `specs/011-schema-limits/` (FR-1001: Antwortschema fester Größe —
+  `values` als Liste, keine Unions, keine optionalen Felder, keine enums)
 
 ## Stack & Regeln
 

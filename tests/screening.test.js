@@ -84,14 +84,18 @@ test('SC-401: Longlist enthält keine Nicht-Auswahl-Kriterien, Gewichte, Punkte,
   assert.ok(!s.includes('leads'));
 });
 
-test('Longlist-Schema: nur Auswahl-Schlüssel, enum je select, null erlaubt, keine Score-Felder', () => {
+test('Longlist-Schema: nur Auswahl-Schlüssel, Werte als Text, Ausprägungen im Prompt, keine Score-Felder', () => {
   const { p, branche } = fixture();
-  const schema = buildLonglistRequest(p, {}).output_config.format.schema;
+  const req = buildLonglistRequest(p, {});
+  const schema = req.output_config.format.schema;
   const values = schema.properties.companies.items.properties.values;
-  assert.deepEqual(values.required, ['k1']);
-  const enumBranch = values.properties.k1.properties.value.anyOf.find((a) => a.enum);
-  assert.deepEqual(enumBranch.enum, branche.rules.options.map((o) => o.label));
-  assert.ok(values.properties.k1.properties.value.anyOf.some((a) => a.type === 'null'));
+  // Liste statt einem Feld je Kriterium — feste Schemagröße (FR-1001)
+  assert.equal(values.type, 'array');
+  assert.deepEqual(values.items.required, ['key', 'value', 'source']);
+  assert.deepEqual(values.items.properties.value, { type: 'string' });
+  // Die Ausprägungen stehen stattdessen wörtlich im Prompt
+  const text = req.messages[0].content;
+  for (const o of branche.rules.options) assert.ok(text.includes(o.label), `„${o.label}" fehlt im Prompt`);
   assert.ok(!JSON.stringify(schema).includes('score'));
 });
 
@@ -174,10 +178,11 @@ test('buildDeepScreeningRequest: ein Unternehmen, alle Pre-Screening-Kriterien, 
   assert.ok(s.includes('Branche') && s.includes('Mitarbeiter') && s.includes('Digitalisierungsgrad'));
   assert.equal(req.tools[0].max_uses, DEEP_MAX_SEARCHES);
   assert.equal(req.max_tokens, 8000);
-  const k1 = req.output_config.format.schema.properties.values.properties.k1;
-  assert.deepEqual(k1.required, ['value', 'source', 'confidence', 'evidenceDate']);
-  const confEnum = k1.properties.confidence.anyOf.find((a) => a.enum);
-  assert.deepEqual(confEnum.enum, ['direct', 'inferred']);
+  const values = req.output_config.format.schema.properties.values;
+  assert.equal(values.type, 'array');
+  assert.deepEqual(Object.keys(values.items.properties), ['key', 'value', 'source', 'confidence', 'evidenceDate']);
+  assert.deepEqual(values.items.required, ['key', 'value', 'source', 'confidence', 'evidenceDate']);
+  assert.deepEqual(values.items.properties.confidence.enum, ['direct', 'inferred', '']);
   assert.ok(req.output_config.format.schema.required.includes('found'));
 });
 
@@ -327,7 +332,7 @@ test('SC-404: evaluate identisch mit und ohne Konfidenz-Metadaten (Verfassung II
 });
 
 test('estimateDeepCost: Spanne je Firma × Anzahl, 2 Nachkommastellen', () => {
-  assert.deepEqual(estimateDeepCost(10), { min: 1.5, max: 4 });
+  assert.deepEqual(estimateDeepCost(10), { min: 2, max: 8 });
   assert.deepEqual(estimateDeepCost(0), { min: 0, max: 0 });
 });
 
@@ -442,4 +447,80 @@ test('qualificationQueue: nur Screening-Leads mit offenen Qualifizierungskriteri
   assert.deepEqual(qualificationQueue(f.p, [open, done, manual, open2]).map((l) => l.id), ['l1', 'l5']);
   assert.deepEqual(qualificationQueue(f.p, null), []);
   assert.deepEqual(qualificationQueue(null, [{ id: 'x' }]), []);
+});
+
+// --- Schema-Grenzen der API (FR-1001) ---
+// Die Anthropic-API lehnt Schemas mit mehr als 16 union-typisierten Parametern ab
+// („too many parameters with union types"). Vorher hatte jedes Kriterium vier davon,
+// womit ab 4 Pre-Screening-Kriterien Schluss war. Diese Tests halten das Schema
+// union-frei — unabhängig davon, wie viele Kriterien ein Profil hat.
+
+function countUnions(node) {
+  if (node === null || typeof node !== 'object') return 0;
+  if (Array.isArray(node)) return node.reduce((n, x) => n + countUnions(x), 0);
+  let n = 0;
+  if (Array.isArray(node.anyOf) || Array.isArray(node.allOf) || Array.isArray(node.oneOf)) n += 1;
+  if (Array.isArray(node.type)) n += 1;
+  for (const value of Object.values(node)) n += countUnions(value);
+  return n;
+}
+
+function wideProfile(count) {
+  const p = createProfile('Viele Kriterien');
+  p.criteria = Array.from({ length: count }, (_, i) => {
+    const c = createCriterion('select');
+    c.name = `Kriterium ${i + 1}`;
+    c.weight = 100 / count;
+    c.stage = 'prescreening';
+    c.rules.options = [
+      { id: `o${i}a`, label: `A${i}`, points: 100 },
+      { id: `o${i}b`, label: `B${i}`, points: 0 },
+    ];
+    return c;
+  });
+  p.tiers = [createTier('A', 50), createTier('C', 0)];
+  return p;
+}
+
+// Zweite Grenze der API: höchstens 24 Parameter, die nicht in `required` stehen.
+function countOptional(node) {
+  if (node === null || typeof node !== 'object') return 0;
+  if (Array.isArray(node)) return node.reduce((n, x) => n + countOptional(x), 0);
+  let n = 0;
+  if (node.type === 'object' && node.properties) {
+    const required = new Set(Array.isArray(node.required) ? node.required : []);
+    n += Object.keys(node.properties).filter((k) => !required.has(k)).length;
+  }
+  for (const value of Object.values(node)) n += countOptional(value);
+  return n;
+}
+
+test('Longlist-Schema: keine Unions, keine optionalen Parameter — auch bei 30 Kriterien', () => {
+  const schema = buildLonglistRequest(wideProfile(30), {}).output_config.format.schema;
+  assert.equal(countUnions(schema), 0);
+  assert.equal(countOptional(schema), 0);
+});
+
+test('Deep-Schema: keine Unions, keine optionalen Parameter — auch bei 30 Kriterien', () => {
+  const req = buildDeepScreeningRequest(wideProfile(30), { name: 'Muster GmbH' });
+  assert.equal(countUnions(req.output_config.format.schema), 0);
+  assert.equal(countOptional(req.output_config.format.schema), 0);
+});
+
+test('Deep-Antwort: leerer Text, fehlendes Feld und null gelten gleichermaßen als unbekannt', () => {
+  const { p } = fixture();
+  const raw = {
+    found: true,
+    summary: 'Ein Unternehmen.',
+    sources: ['https://example.org'],
+    values: [
+      { key: 'k1', value: 'SaaS', source: 'https://example.org/ueber', confidence: 'direct', evidenceDate: '2026-05' },
+      { key: 'k2', value: '', source: '', confidence: '', evidenceDate: '' },   // vereinbartes „unbekannt"
+      { key: 'k3', source: 'https://example.org/x' },                           // Wert fehlt ganz
+    ],
+  };
+  const res = parseDeepResult(raw, p, 'Muster GmbH');
+  assert.equal(res.candidate.values[p.criteria[0].id], 'saas');
+  assert.equal(res.candidate.values[p.criteria[1].id], undefined);
+  assert.equal(res.candidate.values[p.criteria[2].id], undefined);
 });

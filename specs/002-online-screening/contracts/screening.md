@@ -60,28 +60,35 @@ gelten sinngemäß für beide Request-Arten weiter (SC-004-Basis).
     "required": ["name", "website", "reasoning", "sources", "values"],
     "properties": {
       "name":      { "type": "string" },
-      "website":   { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+      "website":   { "type": "string" },
       "reasoning": { "type": "string" },
       "sources":   { "type": "array", "items": { "type": "string" } },
-      "values":    { "type": "object", "additionalProperties": false,
-                     "required": ["k1", "…"],
-                     "properties": {
-                       "k<i>": { "type": "object", "additionalProperties": false,
-                                 "required": ["value", "source"],
-                                 "properties": {
-                                   "value":  "<typabhängig, immer | null>",
-                                   "source": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
-                                 } } } } } } } }
+      "values":    { "type": "array",
+                     "items": { "type": "object", "additionalProperties": false,
+                                "required": ["key", "value", "source"],
+                                "properties": { "key":    { "type": "string" },
+                                                "value":  { "type": "string" },
+                                                "source": { "type": "string" } } } }
+    }
 ```
 
-`value` je Kriterientyp: select ⇒ `enum` der Options-Labels | null; boolean ⇒ boolean | null;
+`values` ist eine **Liste** mit einem Eintrag je Kriterium; `key` ist das Kürzel aus der
+Kriterienliste (`k1..kn`). Alle Felder sind erforderlich und vom Typ `string`; **leerer
+Text bedeutet „unbekannt"**. Warum keine Unions, keine optionalen Felder und kein Objekt
+mit einem Feld je Kriterium: siehe `specs/011-schema-limits/spec.md` (FR-1001) — die API
+begrenzt Schemas auf 16 union-typisierte und 24 optionale Parameter und lehnt zu große
+Grammatiken ab. Die zulässigen Ausprägungen stehen im **Prompt**, nicht im Schema;
+`mapCompanyValues` prüft sie beim Auswerten.
+
 range/scale ⇒ number | null. **Punkte, Gewichte oder Scores existieren im Schema nicht.**
 
 ## Parsing-Regeln (parseCandidates)
 
 - Kandidat ohne mindestens eine nicht-leere Quelle (`sources` und alle `source`-Felder leer)
   wird **verworfen** (Warnung „ohne Quelle verworfen", Edge Case der Spec).
-- `value: null` ⇒ Wert fehlt (kein Eintrag in `lead.values`).
+- Leerer `value` (oder `null`/fehlend) ⇒ Wert fehlt (kein Eintrag in `lead.values`).
+- Textwerte werden zurückgewandelt: `"Ja"`/`"Nein"` ⇒ boolean, `"250"` ⇒ Zahl.
+  Eng ausgelegt — `"ca. 250"` gilt als unbrauchbar und bleibt offen (lieber offen als geraten).
 - select: Options-Label-Match case-insensitiv/getrimmt gegen das Profil ⇒ `optionId`;
   kein Match (sollte durch enum nicht vorkommen) ⇒ Wert fehlt + Warnung mit Rohtext.
 - scale: nicht-ganzzahlige Werte werden gerundet; außerhalb `[min, max]` ⇒ Wert fehlt +

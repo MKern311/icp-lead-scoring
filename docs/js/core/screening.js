@@ -12,7 +12,10 @@ export const DEEP_MAX_SEARCHES = 12;
 // Zwei Firmen gleichzeitig: halbiert die Wartezeit, bleibt weit unter dem Rate-Limit.
 export const DEEP_CONCURRENCY = 2;
 // Grobe Richtwerte in USD — Abrechnungswährung der API (Anzeige, keine Abrechnung)
-export const COST_ESTIMATES = { longlist: [0.35, 0.9], deepPerCompany: [0.15, 0.4] };
+// Gemessen am 27.08.2026 (Opus 5, 12 Suchen): 103k Eingabe + 3,1k Ausgabe = 0,71 $ für
+// ein Unternehmen. Die Spanne bildet wenige bis maximal viele Suchen ab. Die
+// Longlist-Spanne ist rechnerisch hergeleitet, nicht gemessen.
+export const COST_ESTIMATES = { longlist: [0.35, 1.2], deepPerCompany: [0.2, 0.8] };
 // Listenpreise claude-opus-5 (USD je 1 Mio. Token) + Websuche (USD je 1.000 Suchen).
 // Cache-Faktoren gemäß Anthropic-Preisliste; diese Requests cachen nicht, defensiv trotzdem.
 export const PRICING = {
@@ -102,7 +105,7 @@ function valueDescription(c) {
     case 'range':
       return 'Zahlenwert (die tatsächliche Größe, z. B. Mitarbeiterzahl)';
     case 'boolean':
-      return 'Ja (true) oder Nein (false)';
+      return 'Genau „Ja" oder „Nein"';
     case 'scale':
       return `Ganzzahl von ${c.rules.min} bis ${c.rules.max}`;
     default:
@@ -110,40 +113,53 @@ function valueDescription(c) {
   }
 }
 
-function valueSchema(c) {
-  switch (c.type) {
-    case 'select':
-      return { anyOf: [{ type: 'string', enum: c.rules.options.map((o) => o.label) }, { type: 'null' }] };
-    case 'boolean':
-      return { anyOf: [{ type: 'boolean' }, { type: 'null' }] };
-    case 'scale':
-      return { anyOf: [{ type: 'integer' }, { type: 'null' }] };
-    default:
-      return { anyOf: [{ type: 'number' }, { type: 'null' }] };
-  }
+// Schema-Grenzen der API (FR-1001): Sie lehnt Schemas mit mehr als 16 union-typisierten
+// **und** mehr als 24 optionalen Parametern ab — beides skaliert mit der Zahl der
+// Kriterien, beides war bei einem gewachsenen Profil schnell gerissen (12 Kriterien
+// ergaben 49). Deshalb ist hier **jedes** Feld erforderlich und einfach typisiert:
+// „unbekannt" ist der leere Text, nicht null und nicht ein fehlendes Feld. Damit ist
+// das Schema union- und optionsfrei und die Zahl der Kriterien wieder egal.
+//
+// Preis dafür: Zahlen und Ja/Nein kommen als Text zurück (ein Typ je Feld, sonst
+// bräuchte es wieder eine Union). `mapCompanyValues` wandelt sie zurück; der Prompt
+// nennt zu jedem Kriterium das erwartete Format.
+const UNKNOWN = '';
+
+// Alle Werte sind schlichter Text. Kein enum: Die dritte Grenze der API ist die Größe
+// der kompilierten Grammatik, und Ausprägungs-Listen sind dort der größte Posten — mit
+// enum war schon bei 16 Kriterien à 5 Klassen Schluss. Die zulässigen Ausprägungen
+// stehen ohnehin wörtlich im Prompt (`valueDescription`), und `mapCompanyValues` prüft
+// jeden Wert gegen die Liste und verwirft, was nicht passt. Die Grenze wird also nicht
+// aufgegeben, sie wandert nur vom Schema in die Auswertung — wo sie ohnehin nötig war.
+function valueSchema() {
+  return { type: 'string' };
 }
 
-// Werte-Teilschema je Kriterium; withMeta ergänzt Konfidenz + Belegdatum (Deep).
-function valuesSchema(criteria, { withMeta = false } = {}) {
-  const valueProps = {};
-  const keys = criteria.map((_, i) => key(i));
-  criteria.forEach((c, i) => {
-    const properties = {
-      value: valueSchema(c),
-      source: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-    };
-    if (withMeta) {
-      properties.confidence = { anyOf: [{ type: 'string', enum: ['direct', 'inferred'] }, { type: 'null' }] };
-      properties.evidenceDate = { anyOf: [{ type: 'string' }, { type: 'null' }] };
-    }
-    valueProps[key(i)] = {
+// Werte als **Liste**, nicht als Objekt mit einem Feld je Kriterium (FR-1001).
+// Der Grund ist die dritte Grenze der API: Die Größe der kompilierten Grammatik wächst
+// mit der Zahl der Felder in einem Objekt — mit einem Feld je Kriterium war ab etwa
+// 13 Kriterien Schluss, unabhängig von Unions oder optionalen Feldern. Als Liste hat
+// das Schema eine **feste** Größe, egal wie viele Kriterien ein Profil hat.
+// `key` benennt das Kriterium (k1, k2, … — dieselben Kürzel wie im Prompt).
+function valuesSchema({ withMeta = false } = {}) {
+  const properties = {
+    key: { type: 'string' },
+    value: valueSchema(),
+    source: { type: 'string' },
+  };
+  if (withMeta) {
+    properties.confidence = { type: 'string', enum: ['direct', 'inferred', UNKNOWN] };
+    properties.evidenceDate = { type: 'string' };
+  }
+  return {
+    type: 'array',
+    items: {
       type: 'object',
       additionalProperties: false,
-      required: withMeta ? ['value', 'source', 'confidence', 'evidenceDate'] : ['value', 'source'],
+      required: Object.keys(properties),   // alles erforderlich — leer heißt unbekannt
       properties,
-    };
-  });
-  return { type: 'object', additionalProperties: false, required: keys, properties: valueProps };
+    },
+  };
 }
 
 function longlistSchema(criteria) {
@@ -160,10 +176,10 @@ function longlistSchema(criteria) {
           required: ['name', 'website', 'reasoning', 'sources', 'values'],
           properties: {
             name: { type: 'string' },
-            website: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+            website: { type: 'string' },
             reasoning: { type: 'string' },
             sources: { type: 'array', items: { type: 'string' } },
-            values: valuesSchema(criteria),
+            values: valuesSchema(),
           },
         },
       },
@@ -178,10 +194,10 @@ function deepSchema(criteria) {
     required: ['found', 'website', 'summary', 'sources', 'values'],
     properties: {
       found: { type: 'boolean' },
-      website: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      website: { type: 'string' },
       summary: { type: 'string' },
       sources: { type: 'array', items: { type: 'string' } },
-      values: valuesSchema(criteria, { withMeta: true }),
+      values: valuesSchema({ withMeta: true }),
     },
   };
 }
@@ -207,21 +223,24 @@ function criterionLine(c, i, { targetsAsFilter = false } = {}) {
 const LONGLIST_SYSTEM_PROMPT = `Du bist ein sorgfältiger B2B-Recherche-Assistent. Du suchst reale Unternehmen, die zu den genannten Kriterien passen, ausschließlich über öffentlich zugängliche Quellen: Firmenwebsites (Über uns, Produkte, Karriere, Impressum), Presse und News (Pressemitteilungsportale, Wirtschafts-, Fach- und Regionalmedien), Firmenverzeichnisse und öffentliche Registerauszüge, Stellenanzeigen, Messe-Ausstellerlisten und Verbandsverzeichnisse sowie öffentlich einsehbare Social-Media-Unternehmensseiten. Inhalte hinter Login oder Paywall nutzt du nicht.
 
 Regeln:
-- Erfinde nichts. Wenn du eine Angabe nicht belegen kannst, setze value auf null.
+- Erfinde nichts. Kannst du eine Angabe nicht belegen, setze value auf "" (leerer Text) — rate nie.
 - Zeilen „Erforderlich:" sind harte Filter — Unternehmen, die sie nicht erfüllen, gehören nicht in die Liste.
 - Gib zu jeder belegten Angabe die Quell-URL an (source), und zu jedem Unternehmen mindestens eine Quell-URL (sources). Unternehmen ohne belastbare Quelle lässt du weg.
 - Nur reale, aktuell existierende Unternehmen. Keine Duplikate.
-- reasoning: 1–2 deutsche Sätze, warum das Unternehmen passt.`;
+- reasoning: 1–2 deutsche Sätze, warum das Unternehmen passt.
+- values ist eine Liste mit genau einem Eintrag je Kriterium; key ist das Kürzel aus der Kriterienliste (k1, k2, …).`;
 
 const DEEP_SYSTEM_PROMPT = `Du bist ein sorgfältiger B2B-Recherche-Assistent. Du prüfst genau EIN vorgegebenes Unternehmen anhand konkreter Kriterien — ausschließlich über öffentlich zugängliche Quellen: Firmenwebsite, Presse und News, Firmenverzeichnisse und öffentliche Registerauszüge (Pflichtveröffentlichungen), Jobportale und Karriereseiten, Messe-Ausstellerlisten, öffentliche Übersichten von Bewertungsplattformen sowie öffentlich einsehbare Social-Media-Unternehmensseiten. Inhalte hinter Login oder Paywall nutzt du nicht.
 
 Regeln:
-- Ist keine Website angegeben, identifiziere zuerst die offizielle Website. Kannst du das Unternehmen nicht eindeutig identifizieren, setze found auf false und alle Werte auf null.
-- Erfinde nichts. Jeder Wert braucht eine konkrete Quell-URL (source); ohne Quelle setze value auf null.
+- Ist keine Website angegeben, identifiziere zuerst die offizielle Website. Kannst du das Unternehmen nicht eindeutig identifizieren, setze found auf false und alle Werte auf "".
+- Erfinde nichts. Jeder Wert braucht eine konkrete Quell-URL (source); ohne Quelle setze value und source auf "".
 - Der Beleg muss zur Art des Kriteriums passen: Stellenanzeigen-Kriterien nur mit Jobportal- oder Karriereseiten-URL, Presse-/News-Kriterien nur mit Presse- oder News-URL.
-- confidence: "direct", wenn die Quelle den Wert explizit nennt; "inferred", wenn du ihn aus Indizien ableitest (z. B. Größenband einer LinkedIn-Übersicht, Bilanzsumme statt Umsatz).
-- evidenceDate: Stand des Belegs im Format JJJJ-MM, wenn bestimmbar, sonst null.
-- summary: 1–2 deutsche Sätze zum Unternehmen; sources: die wichtigsten Quell-URLs (mindestens eine).`;
+- confidence: "direct", wenn die Quelle den Wert explizit nennt; "inferred", wenn du ihn aus Indizien ableitest (z. B. Größenband einer LinkedIn-Übersicht, Bilanzsumme statt Umsatz); "" ohne Wert.
+- Zahlen und Ja/Nein kommen als Text: eine blanke Zahl ohne Einheit (z. B. "250"), bzw. genau "Ja" oder "Nein". Keine Bereiche, keine Zusätze.
+- evidenceDate: Stand des Belegs im Format JJJJ-MM, wenn bestimmbar — sonst "".
+- summary: 1–2 deutsche Sätze zum Unternehmen; sources: die wichtigsten Quell-URLs (mindestens eine).
+- values ist eine Liste mit genau einem Eintrag je Kriterium; key ist das Kürzel aus der Kriterienliste (k1, k2, …).`;
 
 // Datumszeile: ohne sie legt das Modell den Bezugspunkt für „letzte 12 Monate"
 // selbst fest und datiert Belege falsch (FR-408).
@@ -316,12 +335,44 @@ export function qualificationQueue(profile, leads) {
 }
 
 const cleanUrl = (s) => (typeof s === 'string' && s.trim() ? s.trim() : null);
+
+// Rückwandlung der Textwerte aus dem Schema (FR-1001). Bewusst eng: „250" wird zu 250,
+// „ca. 250 Mitarbeiter" nicht — ein geratener Wert wäre schlimmer als ein offener.
+function toBoolean(raw) {
+  if (typeof raw === 'boolean') return raw;
+  const t = String(raw).trim().toLowerCase();
+  if (['ja', 'true', 'yes'].includes(t)) return true;
+  if (['nein', 'false', 'no'].includes(t)) return false;
+  return null;
+}
+
+function toNumber(raw) {
+  if (typeof raw === 'number') return raw;
+  const t = String(raw).trim().replace(/\s/g, '').replace(',', '.');
+  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+}
 const EVIDENCE_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 // Gemeinsames Werte-Mapping (Longlist + Deep). requireSource: Wert ohne Quelle wird
 // verworfen (Anti-Halluzination, Deep). withMeta: Konfidenz/Belegdatum defensiv
 // übernehmen. Warnungstexte sind testverankert.
-function mapCompanyValues(valuesObj, criteria, { name, requireSource = false, withMeta = false, warnings }) {
+// Antwortwerte auf eine Zuordnung Kürzel → Eintrag bringen. Neu ist die Listenform
+// (siehe valuesSchema); die frühere Objektform bleibt lesbar, damit gespeicherte
+// Antworten und Handbearbeitung nicht brechen.
+function valuesByKey(raw) {
+  if (Array.isArray(raw)) {
+    const map = {};
+    for (const entry of raw) {
+      const k = typeof entry?.key === 'string' ? entry.key.trim() : '';
+      if (k) map[k] = entry;
+    }
+    return map;
+  }
+  return raw && typeof raw === 'object' ? raw : {};
+}
+
+function mapCompanyValues(rawValues, criteria, { name, requireSource = false, withMeta = false, warnings }) {
+  const valuesObj = valuesByKey(rawValues);
   const values = {};
   const valueSources = {};
   const confidence = {};
@@ -331,7 +382,9 @@ function mapCompanyValues(valuesObj, criteria, { name, requireSource = false, wi
   criteria.forEach((c, i) => {
     const entry = valuesObj?.[key(i)];
     const raw = entry?.value;
-    if (raw === null || raw === undefined) return;
+    // Leerer Text ist das vereinbarte „unbekannt" (FR-1001); null/undefined bleiben
+    // zulässig, damit ältere Antworten und Handbearbeitung weiter funktionieren.
+    if (raw === null || raw === undefined || (typeof raw === 'string' && !raw.trim())) return;
     const src = cleanUrl(entry.source);
     if (requireSource && !src) {
       warnings.push(`„${name}": Wert für „${c.name}" ohne Quelle — verworfen.`);
@@ -347,18 +400,26 @@ function mapCompanyValues(valuesObj, criteria, { name, requireSource = false, wi
       }
       mapped = opt.id;
     } else if (c.type === 'boolean') {
-      if (typeof raw !== 'boolean') return;
-      mapped = raw;
+      // Kommt als Text („Ja"/„Nein"), weil das Schema je Feld nur einen Typ kennt
+      const b = toBoolean(raw);
+      if (b === null) {
+        warnings.push(`„${name}": „${raw}" ist kein Ja/Nein für „${c.name}" — Wert bleibt offen.`);
+        return;
+      }
+      mapped = b;
     } else if (c.type === 'scale') {
-      const v = Math.round(Number(raw));
+      const v = Math.round(toNumber(raw));
       if (!Number.isFinite(v) || v < c.rules.min || v > c.rules.max) {
         warnings.push(`„${name}": ${raw} liegt außerhalb der Skala von „${c.name}" — Wert bleibt offen.`);
         return;
       }
       mapped = v;
     } else {
-      const v = Number(raw);
-      if (!Number.isFinite(v)) return;
+      const v = toNumber(raw);
+      if (!Number.isFinite(v)) {
+        warnings.push(`„${name}": „${raw}" ist keine Zahl für „${c.name}" — Wert bleibt offen.`);
+        return;
+      }
       mapped = v;
     }
     values[c.id] = mapped;

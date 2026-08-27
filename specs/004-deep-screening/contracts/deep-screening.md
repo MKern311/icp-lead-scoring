@@ -49,7 +49,7 @@ Regeln in `specs/005-research-quality/contracts/research-quality.md`.
   muss zum Signal passen (Stellen-Signale nur Jobportal-/Karriereseiten-URL,
   News-Signale nur Presse-URL); `confidence`: `direct` = Quelle nennt den Wert
   explizit, `inferred` = aus Indizien abgeleitet; `evidenceDate` = Stand des Belegs
-  als `JJJJ-MM`, sonst null; Login/Paywall verboten.
+  als `JJJJ-MM`, sonst leerer Text; Login/Paywall verboten.
 - Output-Schema (Structured Output):
 
 ```json
@@ -57,25 +57,27 @@ Regeln in `specs/005-research-quality/contracts/research-quality.md`.
   "required": ["found", "website", "summary", "sources", "values"],
   "properties": {
     "found":   { "type": "boolean" },
-    "website": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+    "website": { "type": "string" },
     "summary": { "type": "string" },
     "sources": { "type": "array", "items": { "type": "string" } },
-    "values":  { "k<i>": { "required": ["value", "source", "confidence", "evidenceDate"],
-                  "value": "<typabhängig | null>",
-                  "source": "string | null",
-                  "confidence": "enum ['direct','inferred'] | null",
-                  "evidenceDate": "string | null" } } } }
+    "values":  { "type": "array", "items": {
+                   "required": ["key", "value", "source", "confidence", "evidenceDate"],
+                   "key": "string (k1..kn)", "value": "string", "source": "string",
+                   "confidence": "enum ['direct','inferred','']", "evidenceDate": "string" } } } }
+
+`values` ist eine **Liste** fester Schemagröße, alle Felder erforderlich, leerer Text =
+unbekannt (FR-1001, `specs/011-schema-limits/spec.md`).
 ```
 
 ## P: parseDeepResult (SC-403)
 
 - `found !== true` oder kaputte Antwort ⇒ `candidate: null` + Warnung („nicht
   eindeutig identifizierbar"). Wirft nie.
-- **Quellenpflicht je Wert**: nicht-null-`value` ohne `source` ⇒ Wert wird
+- **Quellenpflicht je Wert**: belegter `value` ohne `source` ⇒ Wert wird
   verworfen + Warnung (härter als Longlist-Parsing).
 - `confidence`: nur `direct`/`inferred` wird übernommen; anderes ⇒ weggelassen.
 - `evidenceDate`: nur `JJJJ-MM` (Regex `^\d{4}-(0[1-9]|1[0-2])$`) wird übernommen;
-  anderes ⇒ weggelassen + Warnung. Kein Eintrag für null-Werte.
+  anderes ⇒ weggelassen + Warnung. Kein Eintrag für leere Werte.
 - Kandidat ohne jede Quelle (weder `sources` noch Wert-Quellen) ⇒ `null` + Warnung.
 - Typ-Mapping (select-Label, scale-Rundung/-Grenzen, range) wie 002-Parsing.
 
