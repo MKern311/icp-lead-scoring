@@ -1,7 +1,7 @@
 // Service Worker: cache-first mit versioniertem Cache — offline nach erstem Laden
 // (Constitution III). Bei neuer Version Cache-Namen hochzählen.
 
-const CACHE = 'icp-cache-v14';
+const CACHE = 'icp-cache-v15';
 
 const ASSETS = [
   './',
@@ -21,6 +21,7 @@ const ASSETS = [
   './js/core/profile-io.js',
   './js/core/screening.js',
   './js/core/profile-code.js',
+  './js/core/backup.js',
   './js/screening-api.js',
   './js/ui/workflow.js',
   './js/ui/criterion-editor.js',

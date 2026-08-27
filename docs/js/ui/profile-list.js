@@ -4,6 +4,7 @@
 import * as store from '../store.js';
 import { createProfile } from '../core/model.js';
 import { exportProfile, importProfile } from '../core/profile-io.js';
+import { buildBackup, readBackup, BACKUP_FORMAT } from '../core/backup.js';
 import { templates } from '../templates.js';
 import { esc, toast, confirmDialog, download, slugify, navigate, refreshActiveProfileIndicator, textDialog } from '../app.js';
 import { encodeProfileCode, decodeProfileCode } from '../core/profile-code.js';
@@ -93,6 +94,7 @@ function draw() {
             ${isActive ? '' : `<button class="btn btn-small" data-action="activate" data-id="${p.id}">Aktivieren</button>`}
             <button class="btn btn-small" data-action="edit" data-id="${p.id}">Bearbeiten</button>
             <button class="btn btn-small" data-action="duplicate" data-id="${p.id}">Duplizieren</button>
+            <button class="btn btn-small" data-action="backup" data-id="${p.id}">Sicherung</button>
             <button class="btn btn-small" data-action="export" data-id="${p.id}">Exportieren</button>
             <button class="btn btn-small" data-action="share-code" data-id="${p.id}">Code teilen</button>
             <button class="btn btn-small" data-action="delete" data-id="${p.id}">Löschen</button>
@@ -127,7 +129,7 @@ function draw() {
       <h1>ICP-Profile</h1>
       <div class="row-actions">
         <button class="btn btn-primary" data-action="new">Neues Profil</button>
-        <button class="btn" data-action="import">Profil importieren</button>
+        <button class="btn" data-action="import">Sicherung oder Profil laden</button>
         <button class="btn" data-action="paste-code">Profil aus Code laden</button>
       </div>
     </div>
@@ -144,7 +146,12 @@ function draw() {
       : `<div class="table-wrap"><table>
           <thead><tr><th>Profil</th><th class="right">Kriterien</th><th class="right">Leads</th><th>Aktionen</th></tr></thead>
           <tbody>${rows}</tbody>
-        </table></div>`}
+        </table></div>
+        <p class="hint" style="margin-top: var(--space-3)"><strong>Sicherung</strong> legt Profil <em>und</em> Leads als eine Datei ab — damit stellen Sie
+        den Stand vollständig wieder her. <strong>Exportieren</strong> und <strong>Code teilen</strong> geben nur das
+        Profil weiter, ohne Leads. Alle drei enthalten nie Ihren API-Schlüssel.</p>
+        <p class="hint">Ihre Daten liegen ausschließlich in diesem Browser — und dort getrennt je Adresse.
+        Nach größeren Recherchen lohnt eine Sicherung.</p>`}
     ${orphanSection}
     <input type="file" accept=".json,application/json" id="profile-import-file" hidden>
   `;
@@ -232,6 +239,16 @@ async function handleAction(action, dataset) {
       draw();
       break;
     }
+    case 'backup': {
+      const profile = store.getProfile(id);
+      if (!profile) return;
+      const leads = store.listLeads(id);
+      const today = new Date().toISOString().slice(0, 10);
+      download(`icp-sicherung-${slugify(profile.name)}-${today}.json`,
+        JSON.stringify(buildBackup(profile, leads), null, 2), 'application/json');
+      toast(`Sicherung erstellt: Profil und ${leads.length} Lead(s) in einer Datei.`);
+      break;
+    }
     case 'export': {
       const profile = store.getProfile(id);
       if (!profile) return;
@@ -287,6 +304,12 @@ async function handleImportFile(event) {
     toast('Die Datei ist kein gültiges JSON.');
     return;
   }
+  // Eine Datei, zwei Formate: Sicherung (mit Leads) oder Profil-Export (ohne).
+  if (data?.format === BACKUP_FORMAT) {
+    restoreBackup(data);
+    return;
+  }
+
   const { profile, errors } = importProfile(data);
   if (!profile) {
     toast(`Import abgelehnt: ${errors[0]}`);
@@ -295,5 +318,24 @@ async function handleImportFile(event) {
   profile.name = store.uniqueProfileName(profile.name);
   store.saveProfile(profile);
   toast(`Profil „${profile.name}" importiert.`);
+  draw();
+}
+
+// Sicherung einspielen: Profil und Leads landen als neuer Bestand neben dem
+// vorhandenen — eine Wiederherstellung darf nie etwas überschreiben.
+function restoreBackup(data) {
+  const { profile, leads, errors, warnings } = readBackup(data);
+  if (!profile) {
+    toast(`Sicherung abgelehnt: ${errors[0]}`);
+    return;
+  }
+  profile.name = store.uniqueProfileName(profile.name);
+  store.saveProfile(profile);
+  for (const lead of leads) {
+    lead.profileId = profile.id;
+    store.saveLead(lead);
+  }
+  toast(`Wiederhergestellt: „${profile.name}" mit ${leads.length} Lead(s).`);
+  if (warnings.length > 0) toast(warnings.join(' '));
   draw();
 }

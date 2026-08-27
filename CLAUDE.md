@@ -27,6 +27,8 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   je Profil, Hinweis auf unerreichbare Stufen; Regeln 8–10 im Scoring-Contract)
 - Feature 009: `specs/009-criteria-overview/` (aufklappbare Kriterien-Übersicht im
   Profil-Editor: Gewichte mit Summenzeile, K.o., Reihenfolge, Entfernen, Sortierung)
+- Feature 010: `specs/010-backup/` (Vollsicherung Profil + Leads in einer Datei;
+  Format fixiert in `contracts/backup-format.md`)
 
 ## Stack & Regeln
 
@@ -67,6 +69,12 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Profile teilen: `core/profile-code.js` kodiert das Export-Objekt als
   `ICP1-<base64url(gzip)>` — trägt die Daten selbst, braucht keinen Server, enthält
   nie Leads oder Schlüssel
+- Sichern: `core/backup.js` (`icp-backup`, schemaVersion 1) legt Profil **und** Leads in
+  einer Datei ab. Anders als der Profil-Export trägt die Sicherung die internen IDs von
+  Kriterien/Ausprägungen mit — `lead.values` und `lead.sources` sind danach abgelegt.
+  Einlesen vergibt neue Profil-/Lead-IDs und überschreibt nie; `handleImportFile` in
+  `ui/profile-list.js` erkennt beide Formate an `format`. Nie mit Schlüssel, nie mit
+  Punktzahlen
 - Zugang: `js/gate.js` lädt `app.js` erst nach Wortprüfung (SHA-256), auf localhost
   sofort. **Keine Sicherheitsgrenze** — alles unter `docs/` ist öffentlich abrufbar;
   Geheimnisse gehören dort niemals hin

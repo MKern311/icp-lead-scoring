@@ -3,6 +3,7 @@
 
 import * as store from '../store.js';
 import { evaluate, scoreRange } from '../core/scoring.js';
+import { buildBackup } from '../core/backup.js';
 import { serialize } from '../core/csv.js';
 import { esc, toast, navigate, download, slugify, fmtScore, fmtValue } from '../app.js';
 import { tierBadge } from './lead-form.js';
@@ -83,6 +84,7 @@ function draw() {
     <div class="view-header">
       <h1>Rangliste</h1>
       <div class="row-actions">
+        <button class="btn" data-action="backup">Sicherung</button>
         <button class="btn" data-action="export" ${all.length === 0 ? 'disabled' : ''}>CSV exportieren</button>
         <button class="btn" data-action="import">CSV importieren</button>
         <button class="btn btn-primary" data-action="new">Neuer Lead</button>
@@ -129,7 +131,15 @@ function draw() {
 function handleAction(action) {
   if (action === 'new') { navigate('#/lead/new'); return; }
   if (action === 'import') { navigate('#/import'); return; }
-  if (action === 'export') exportCsv();
+  if (action === 'export') { exportCsv(); return; }
+  if (action === 'backup') {
+    // Profil und Leads in einer Datei — die Wiederherstellung sitzt unter „Profile"
+    const leads = store.listLeads(profile.id);
+    const today = new Date().toISOString().slice(0, 10);
+    download(`icp-sicherung-${slugify(profile.name)}-${today}.json`,
+      JSON.stringify(buildBackup(profile, leads), null, 2), 'application/json');
+    toast(`Sicherung erstellt: Profil und ${leads.length} Lead(s) in einer Datei.`);
+  }
 }
 
 // Export gemäß contracts/csv-format.md: Rohwerte, Punktzahl (Dezimal-Komma), Stufe, Status.
