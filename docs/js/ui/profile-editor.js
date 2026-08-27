@@ -17,6 +17,8 @@ let container = null;
 let working = null;
 let isNew = false;
 let overviewOpen = true;      // Zustand der Kriterien-Übersicht, überlebt das Neuzeichnen
+let sortKey = null;           // null = Profilreihenfolge (die auch gespeichert wird)
+let sortDir = 1;              // 1 = aufsteigend, -1 = absteigend
 
 export function render(section, params) {
   container = section;
@@ -119,6 +121,16 @@ function draw(messages = null) {
   container.querySelector('.overview-card')?.addEventListener('toggle', (e) => {
     overviewOpen = e.target.open;
   });
+  // Spaltenköpfe: aufsteigend → absteigend → aus
+  container.querySelectorAll('[data-sort]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.sort;
+      if (sortKey !== key) { sortKey = key; sortDir = 1; }
+      else if (sortDir === 1) sortDir = -1;
+      else { sortKey = null; sortDir = 1; }
+      draw();
+    });
+  });
   // Suchpräferenz-Picker (FR-016): Mehrfachauswahl aus den Ausprägungen
   container.querySelectorAll('[data-target]').forEach((el) => {
     el.addEventListener('change', () => {
@@ -144,19 +156,22 @@ function overviewCard() {
   const sumOff = Math.abs(sum - 100) > 0.001;
   const count = working.criteria.length;
 
-  const rows = working.criteria.map((c, i) => `
+  const rows = sortedCriteria().map(({ c, index }) => `
     <tr>
       <td><input type="text" maxlength="80" data-bind="c:${c.id}:name" value="${esc(c.name)}"
         aria-label="Name des Kriteriums" placeholder="Ohne Namen"></td>
-      <td class="muted type">${TYPE_LABELS[c.type]}<br><span class="hint">${c.stage === 'prescreening' ? 'Pre-Screening' : 'Qualifizierung'}</span></td>
+      <td class="muted type">${TYPE_LABELS[c.type]}</td>
+      <td class="muted type">${c.stage === 'prescreening' ? 'Pre-Screening' : 'Qualifizierung'}</td>
       <td class="right"><input type="number" min="0" max="100" step="0.1" style="max-width:5.5rem"
         data-bind="c:${c.id}:weight" value="${esc(c.weight)}" aria-label="Gewicht in Prozent"></td>
       <td class="center"><input type="checkbox" data-bind="c:${c.id}:knockout"
         ${c.knockout ? 'checked' : ''} aria-label="K.-o.-Kriterium"></td>
       <td>
         <div class="row-actions">
-          <button class="btn btn-small" data-action="move-criterion" data-id="${c.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} title="Nach oben">↑</button>
-          <button class="btn btn-small" data-action="move-criterion" data-id="${c.id}" data-dir="1" ${i === count - 1 ? 'disabled' : ''} title="Nach unten">↓</button>
+          <button class="btn btn-small" data-action="move-criterion" data-id="${c.id}" data-dir="-1"
+            ${sortKey || index === 0 ? 'disabled' : ''} title="${sortKey ? MOVE_BLOCKED : 'Nach oben'}">↑</button>
+          <button class="btn btn-small" data-action="move-criterion" data-id="${c.id}" data-dir="1"
+            ${sortKey || index === count - 1 ? 'disabled' : ''} title="${sortKey ? MOVE_BLOCKED : 'Nach unten'}">↓</button>
           <button class="btn btn-small" data-action="focus-criterion" data-id="${c.id}">Punktregeln</button>
           <button class="btn btn-small" data-action="remove-criterion" data-id="${c.id}">Entfernen</button>
         </div>
@@ -167,19 +182,83 @@ function overviewCard() {
     <details class="card overview-card" ${overviewOpen ? 'open' : ''}>
       <summary>
         <span class="overview-title">Übersicht: ${count} ${count === 1 ? 'Kriterium' : 'Kriterien'}</span>
-        <span class="muted">Gewichtssumme <span class="weight-sum ${sumOff ? 'off' : ''}" data-weight-sum>${String(sum).replace('.', ',')} %</span></span>
+        <span class="muted">Gewichtssumme <span class="weight-sum ${sumOff ? 'off' : ''}" data-weight-sum>${fmtPercent(sum)}</span></span>
       </summary>
       ${count === 0
         ? '<div class="empty-state">Noch keine Kriterien — fügen Sie unten das erste hinzu.</div>'
         : `<div class="table-wrap"><table>
-            <thead><tr><th>Kriterium</th><th>Typ / Phase</th><th class="right">Gewicht %</th><th class="center">K.o.</th><th></th></tr></thead>
+            <thead><tr>
+              ${sortableTh('name', 'Kriterium')}
+              ${sortableTh('type', 'Typ')}
+              ${sortableTh('stage', 'Phase')}
+              ${sortableTh('weight', 'Gewicht %', 'right')}
+              ${sortableTh('knockout', 'K.o.', 'center')}
+              <th></th>
+            </tr></thead>
             <tbody>${rows}</tbody>
+            <tfoot><tr>
+              <td colspan="3"><strong>Summe</strong>
+                <span class="hint" data-weight-delta>${weightDeltaText(sum)}</span></td>
+              <td class="right"><strong class="weight-sum ${sumOff ? 'off' : ''}" data-weight-sum>${fmtPercent(sum)}</strong></td>
+              <td></td>
+              <td><div class="row-actions">
+                <button class="btn btn-small" data-action="normalize" ${sumOff ? '' : 'disabled'}>Auf 100 normieren</button>
+              </div></td>
+            </tr></tfoot>
           </table></div>
           <div class="row-actions" style="margin-top: var(--space-3)">
-            ${sumOff ? '<button class="btn btn-small" data-action="normalize">Auf 100 normieren</button>' : ''}
+            <span class="hint">Spaltenköpfe sortieren die Ansicht${sortKey ? ' — <button class="btn btn-small" data-action="clear-sort">Sortierung aufheben</button>' : '. Die gespeicherte Reihenfolge ändert sich dabei nicht.'}</span>
             <span class="hint">„Punktregeln" springt zur vollständigen Karte des Kriteriums.</span>
           </div>`}
     </details>`;
+}
+
+const MOVE_BLOCKED = 'Erst die Sortierung aufheben — verschoben wird in der Profilreihenfolge';
+
+const fmtPercent = (value) => `${String(value).replace('.', ',')} %`;
+
+// Wie weit bis 100 %? Ohne diese Zahl muss man bei jedem Gewicht mitrechnen.
+function weightDeltaText(sum) {
+  const delta = Math.round((100 - sum) * 100) / 100;
+  if (delta === 0) return 'genau 100 % — passt';
+  return delta > 0
+    ? `noch ${fmtPercent(delta)} bis 100 %`
+    : `${fmtPercent(-delta)} über 100 %`;
+}
+
+// Sortierung ist reine Ansichtssache: Die gespeicherte Reihenfolge bleibt, wie sie
+// ist (sie bestimmt die Feldreihenfolge im Lead-Formular). Deshalb sind ↑ ↓ nur in
+// der Profilreihenfolge aktiv.
+function sortedCriteria() {
+  const list = working.criteria.map((c, index) => ({ c, index }));
+  if (!sortKey) return list;
+  const key = (c) => {
+    switch (sortKey) {
+      case 'name': return c.name || '';
+      case 'type': return TYPE_LABELS[c.type] || '';
+      case 'stage': return c.stage === 'prescreening' ? 0 : 1;
+      case 'weight': return Number(c.weight) || 0;
+      case 'knockout': return c.knockout ? 1 : 0;
+      default: return 0;
+    }
+  };
+  return list.sort((a, b) => {
+    const va = key(a.c);
+    const vb = key(b.c);
+    const cmp = typeof va === 'string' ? va.localeCompare(vb, 'de') : va - vb;
+    return cmp * sortDir || a.index - b.index;   // Gleichstand: Profilreihenfolge
+  });
+}
+
+// Sortier-Kopf: echtes <button> im <th>, damit Tastatur und Screenreader ohne
+// Zusatzcode funktionieren; aria-sort bleibt am <th>.
+function sortableTh(key, label, extraClass = '') {
+  const active = sortKey === key;
+  const aria = active ? (sortDir === 1 ? 'ascending' : 'descending') : 'none';
+  return `<th class="${extraClass}${active ? ' sorted' : ''}" aria-sort="${aria}">
+    <button type="button" class="th-sort" data-sort="${key}" title="Nach ${esc(label)} sortieren">
+      ${esc(label)}<span class="sort-arrow">${active ? (sortDir === 1 ? '▲' : '▼') : '↕'}</span>
+    </button></th>`;
 }
 
 function criterionCard(c, index) {
@@ -330,6 +409,11 @@ function updateWeightSum() {
     el.textContent = `${String(sum).replace('.', ',')} %`;
     el.classList.toggle('off', Math.abs(sum - 100) > 0.001);
   });
+  const delta = container.querySelector('[data-weight-delta]');
+  if (delta) delta.textContent = weightDeltaText(sum);
+  const normalizeBtn = container.querySelector('.overview-card [data-action="normalize"]');
+  if (normalizeBtn) normalizeBtn.disabled = Math.abs(sum - 100) <= 0.001;
+
   const reach = container.querySelector('#tier-reach');
   if (reach) reach.innerHTML = scoreRangeHtml(working);
   container.querySelectorAll('[data-point-range-for]').forEach((hint) => {
@@ -362,6 +446,11 @@ async function handleAction(dataset) {
       draw();
       return;
     }
+    case 'clear-sort':
+      sortKey = null;
+      sortDir = 1;
+      draw();
+      return;
     case 'focus-criterion': {
       const card = container.querySelector(`#crit-${id}`);
       if (!card) return;

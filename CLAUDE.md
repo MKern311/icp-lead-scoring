@@ -26,7 +26,7 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
 - Feature 008: `specs/008-score-transparency/` (erreichbare Punktzahl je Kriterium und
   je Profil, Hinweis auf unerreichbare Stufen; Regeln 8–10 im Scoring-Contract)
 - Feature 009: `specs/009-criteria-overview/` (aufklappbare Kriterien-Übersicht im
-  Profil-Editor: Gewichte, K.o., Reihenfolge, Entfernen)
+  Profil-Editor: Gewichte mit Summenzeile, K.o., Reihenfolge, Entfernen, Sortierung)
 
 ## Stack & Regeln
 

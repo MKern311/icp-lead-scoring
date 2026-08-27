@@ -273,13 +273,25 @@ details.intro-collapsed[open] > summary { margin-bottom: var(--space-3); }
 .overview-card td input[type="text"],
 .overview-card td input[type="number"] { margin: 0; }
 .overview-card td { vertical-align: middle; }
-.overview-card th:first-child { width: 38%; }
+.overview-card th:first-child { width: 26%; }
+.overview-card td .row-actions { flex-wrap: nowrap; }
 .overview-card td input[type="text"] { width: 100%; }
 .overview-card th.center, .overview-card td.center { text-align: center; }
-.overview-card .row-actions { justify-content: flex-end; }
+.overview-card td .row-actions { justify-content: flex-end; }
 /* Genug Breite für Name, Typ und vier Schaltflächen — darunter scrollt die
    Tabelle in ihrem Container, statt Wörter mitten im Wort zu brechen. */
-.overview-card .table-wrap table { min-width: 44rem; }
+.overview-card .table-wrap table { min-width: 48rem; }
+.th-sort {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+  cursor: pointer; white-space: nowrap; user-select: none;
+}
+.overview-card th.sorted, .overview-card th.sorted .th-sort { color: var(--color-primary); }
+.overview-card th.right .th-sort, .overview-card th.center .th-sort { display: inline; }
+.sort-arrow { margin-left: 0.35em; opacity: 0.35; font-size: 0.75em; }
+.overview-card th.sorted .sort-arrow { opacity: 1; }
+.overview-card tfoot td { border-top: 2px solid var(--color-border); border-bottom: none; }
+.overview-card tfoot .hint { margin-left: var(--space-2); }
 .overview-card td.type, .overview-card td.type .hint { white-space: nowrap; overflow-wrap: normal; }
 
 /* Touch-Bedienung (muss nach den Basisregeln stehen, um sie zu überschreiben):
@@ -290,6 +302,7 @@ details.intro-collapsed[open] > summary { margin-bottom: var(--space-3); }
   .brand { padding: 0.35rem 0; display: inline-block; }
   input[type="checkbox"] { width: 1.15rem; height: 1.15rem; }
   .target-picker label { padding: 0.2rem 0; }
+  .th-sort { min-height: 2.5rem; padding: 0.5rem 0; }
 }
 
 /* Kriterien anpassen im Workflow (Feature 007) */
