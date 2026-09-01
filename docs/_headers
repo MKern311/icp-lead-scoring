@@ -1,0 +1,14 @@
+# Cloudflare Pages liest diese Datei aus dem Ausgabeverzeichnis.
+#
+# Der Service Worker und die Einstiegsseite dürfen NIE aus dem Browser-Cache
+# kommen: sonst hängt ein Besucher hinter einer alten Fassung fest und bekommt
+# eine neue Version erst, wenn sein Cache von selbst abläuft. Alles andere
+# verwaltet der Service Worker über den Cache-Namen (icp-cache-vN).
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache

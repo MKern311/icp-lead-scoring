@@ -1,13 +1,15 @@
 # icp-lead-scoring — Agent Context
 
-Generisches ICP-Definitions- und Lead-Scoring-Tool. Statische Web-App ohne Backend;
-optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
+Generisches ICP-Definitions- und Lead-Scoring-Tool. Statische Web-App;
+optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel),
+lizenzpflichtig über den Dienst im Nachbarrepo `50_dev/icp-licence`.
+Ausgeliefert unter **icp.manuelkern.com** (Cloudflare Pages, Wurzel `docs/`).
 
 ## Verbindliche Artefakte (Quelle der Wahrheit)
 
-- Verfassung: `.specify/memory/constitution.md` (v2.0.0 — Generik, nachvollziehbare Scores,
-  lokale Datenhoheit & Offline-Kern mit eng begrenzter Online-Ausnahme, Einfachheit,
-  testbare Logik)
+- Verfassung: `.specify/memory/constitution.md` (v3.0.0 — Generik, nachvollziehbare Scores,
+  lokale Datenhoheit & Offline-Kern mit zwei eng begrenzten Online-Ausnahmen
+  (Recherche, Lizenzprüfung), Einfachheit, testbare Logik)
 - Feature 001: `specs/001-icp-lead-scoring/` (Scoring-Kern, CSV, Profile)
 - Feature 002: `specs/002-online-screening/` (Kriterien-Phasen, Online-Pre-Screening;
   Screening-Regeln fixiert in `contracts/screening.md`)
@@ -31,6 +33,10 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   Format fixiert in `contracts/backup-format.md`)
 - Feature 011: `specs/011-schema-limits/` (FR-1001: Antwortschema fester Größe —
   `values` als Liste, keine Unions, keine optionalen Felder, keine enums)
+- Feature 012: `specs/012-licence/` (Lizenz vor der Online-Recherche, Umzug auf
+  icp.manuelkern.com via Cloudflare Pages, Zugangswort entfällt; Regeln fixiert in
+  `contracts/licence.md`. Der Dienst dazu liegt in `50_dev/icp-licence` — Cloudflare
+  Worker + D1, laufende Kosten 0 €, eigene `CLAUDE.md`)
 
 ## Stack & Regeln
 
@@ -77,9 +83,21 @@ optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel).
   Einlesen vergibt neue Profil-/Lead-IDs und überschreibt nie; `handleImportFile` in
   `ui/profile-list.js` erkennt beide Formate an `format`. Nie mit Schlüssel, nie mit
   Punktzahlen
-- Zugang: `js/gate.js` lädt `app.js` erst nach Wortprüfung (SHA-256), auf localhost
-  sofort. **Keine Sicherheitsgrenze** — alles unter `docs/` ist öffentlich abrufbar;
-  Geheimnisse gehören dort niemals hin
+- Lizenz: `core/licence.js` ist pure (`normaliseKey`, `tokenPayload`, `isTokenValid`,
+  `deviceLabelFrom`, `activationErrorText`, `runVerdict`) und getestet; `js/licence.js`
+  trägt Netz und Speicher (`activate`, `ensureLicence`, `licenceState`). Der Prüfpunkt
+  sitzt an **genau zwei** Stellen: am Kopf von `startLonglist` und `runDeepLoop` in
+  `ui/workflow.js` — das sind die einzigen Aufrufer von `runScreening`, und
+  `startLonglist` deckt die Nachsuche mit ab. Beide Wächter setzen ihre Sperre
+  **synchron vor dem `await`** (Doppelklick-Fenster). Regeln: **fail-open** — nur eine
+  eindeutige Absage hält an; Export und Sicherung nie blockiert; alles außer der
+  Recherche lizenzfrei. Speicher: `icp.v1.device`, `icp.v1.licence` (Merkmal),
+  `icp.v1.licencekey` (für die stille Erneuerung) — nie exportiert. `normaliseKey`
+  existiert **zweimal** (hier und in `icp-licence/src/core/key.js`); beide Testdateien
+  tragen dieselbe Fallvektor-Tabelle, bei Änderungen immer beide anfassen.
+  **Keine Sicherheitsgrenze** — alles unter `docs/` ist öffentlich abrufbar,
+  die Prüfung ist umgehbar; Geheimnisse gehören dort niemals hin. Das Zugangswort
+  aus Feature 007 (`js/gate.js`) ist mit Feature 012 entfallen
 - Erreichbare Punktzahl: `criterionPointRange`/`scoreRange`/`unreachableTiers` in
   `core/scoring.js` leiten die Spanne allein aus den Punktregeln ab (100 nur erreichbar,
   wenn jedes Kriterium eine 100-Punkte-Ausprägung hat). Zur Renderzeit berechnet, nie

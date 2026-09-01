@@ -201,6 +201,7 @@ export function setWorkflowParams(profileId, { region, count, hints }) {
 // gespiegelt — er soll mit dem Server verschwinden, nicht im Browser zurückbleiben.
 
 let envApiKey = null;
+let envLicenceApi = null;
 
 export async function loadLocalConfig() {
   try {
@@ -208,6 +209,9 @@ export async function loadLocalConfig() {
     if (!res.ok) return;
     const cfg = await res.json();
     if (typeof cfg?.apiKey === 'string' && cfg.apiKey.trim()) envApiKey = cfg.apiKey.trim();
+    if (typeof cfg?.licenceApi === 'string' && cfg.licenceApi.trim()) {
+      envLicenceApi = cfg.licenceApi.trim().replace(/\/+$/, '');
+    }
   } catch {
     // Statisches Hosting, offline oder Server ohne Endpunkt — der Browser-Schlüssel bleibt maßgeblich.
   }
@@ -231,6 +235,64 @@ export function setApiKey(key) {
 
 export function clearApiKey() {
   localStorage.removeItem(`${NS}apikey`);
+}
+
+// --- Lizenz (Feature 012) ---
+//
+// Drei Rohstrings, wie beim API-Schlüssel — kein JSON, damit sie sich im
+// Entwicklerwerkzeug ablesen und von Hand setzen lassen. Keiner davon gehört
+// jemals in einen Export, einen Profil-Code oder eine Sicherung (Verfassung,
+// Zusätzliche Constraints).
+
+// Adresse des Lizenzdienstes. Das Werkzeug hat keinen Build-Schritt, deshalb
+// steht sie hier als Konstante; `LICENCE_API` in der lokalen `.env` überschreibt
+// sie fürs Entwickeln.
+const LICENCE_API_DEFAULT = 'https://licence.manuelkern.com';
+
+export function licenceApiBase() {
+  return envLicenceApi || LICENCE_API_DEFAULT;
+}
+
+// Gerätekennung: einmalig erzeugt, danach unverändert. Wer den Speicher leert,
+// bekommt eine neue und verbraucht damit einen Geräteplatz — genau dafür gibt es
+// den Reset-Endpunkt im Lizenzdienst.
+export function getDeviceId() {
+  const existing = localStorage.getItem(`${NS}device`);
+  if (existing) return existing;
+  const id = uuid();
+  try {
+    localStorage.setItem(`${NS}device`, id);
+  } catch { /* Privater Modus — dann gilt die Kennung nur für diese Sitzung. */ }
+  return id;
+}
+
+export function getLicenceToken() {
+  return localStorage.getItem(`${NS}licence`) || null;
+}
+
+export function setLicenceToken(token) {
+  localStorage.setItem(`${NS}licence`, token);
+}
+
+// Der Schlüssel liegt zusätzlich lokal, damit sich das Merkmal nach 30 Tagen
+// still erneuern kann. Ohne ihn stünde jeder zahlende Kunde am 31. Tag vor einer
+// Eingabemaske.
+export function getLicenceKey() {
+  return localStorage.getItem(`${NS}licencekey`) || null;
+}
+
+export function setLicenceKey(key) {
+  localStorage.setItem(`${NS}licencekey`, key.trim());
+}
+
+/** Nur das Merkmal. Der Schlüssel bleibt — er kann noch gültig sein. */
+export function clearLicenceToken() {
+  remove('licence');
+}
+
+export function clearLicence() {
+  remove('licence');
+  remove('licencekey');
 }
 
 // true genau einmal nach einer Profiländerung — die UI zeigt dann den Hinweis.

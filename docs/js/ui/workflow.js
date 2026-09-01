@@ -17,6 +17,7 @@ import {
   COST_ESTIMATES, PRICING, DEEP_CONCURRENCY, EVIDENCE_MAX_AGE_MONTHS,
 } from '../core/screening.js';
 import { runScreening } from '../screening-api.js';
+import { ensureLicence, activate, licenceState, clearLicence, maskLicenceKey } from '../licence.js';
 import { esc, toast, confirmDialog, navigate, fmtScore, fmtValue, setLeaveGuard } from '../app.js';
 import { tierBadge } from './lead-form.js';
 import { criterionEditorHtml, bindCriterionEditor, scoreRangeHtml, scoreScaleLabel, TYPE_LABELS } from './criterion-editor.js';
@@ -603,9 +604,55 @@ function keyBlockHtml() {
   return keyInputHtml();
 }
 
+// Lizenz-Block — bewusst dasselbe Muster wie der Schlüssel-Block darüber:
+// eine Karte im Schritt, kein eigener Dialog. Der Zustand wird rein lokal
+// gelesen (Ablaufdatum im Merkmal), also ohne await und ohne Netz.
+function licenceBlockHtml() {
+  const state = licenceState();
+  if (state.active) {
+    const until = state.exp
+      ? new Date(state.exp * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : '—';
+    return `
+      <div class="key-source">
+        <span class="badge badge-env">aktiv</span>
+        <span class="muted">Freigabe gilt bis ${esc(until)} und erneuert sich bei
+        jeder Recherche still.${state.key ? ` Schlüssel: <code>${esc(maskLicenceKey(state.key))}</code>` : ''}</span>
+      </div>
+      <div class="row-actions" style="margin-top: var(--space-2)">
+        <button class="btn btn-small" data-action="clear-licence">Lizenz von diesem Gerät lösen</button>
+      </div>`;
+  }
+  if (state.key) {
+    // Merkmal abgelaufen, Schlüssel liegt vor: der nächste Recherche-Start
+    // erneuert still. Kein Grund, den Menschen etwas eintippen zu lassen.
+    return `
+      <div class="key-source">
+        <span class="badge">wird erneuert</span>
+        <span class="muted">Die Freigabe ist abgelaufen und wird beim nächsten
+        Recherche-Start automatisch erneuert. Schlüssel: <code>${esc(maskLicenceKey(state.key))}</code></span>
+      </div>
+      <div class="row-actions" style="margin-top: var(--space-2)">
+        <button class="btn btn-small" data-action="clear-licence">Lizenz von diesem Gerät lösen</button>
+      </div>`;
+  }
+  return `
+    <div class="inline-fields">
+      <div class="field" style="flex:3">
+        <label for="licence-key-input">Lizenzschlüssel</label>
+        <input type="text" id="licence-key-input" placeholder="ICP-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn" data-action="activate-licence">Aktivieren</button>
+    </div>
+    <div class="hint">Die Online-Recherche braucht eine Lizenz; ein Schlüssel gilt für zwei Geräte.
+    Groß- und Kleinschreibung sowie Bindestriche sind egal. Alles andere — Profile, Leads,
+    Bewertung, CSV-Export und Sicherung — funktioniert ohne Lizenz und bleibt es auch.</div>`;
+}
+
 function drawStep2(body) {
   const longlist = longlistCriteria(profile);
   const apiKey = store.getApiKey();
+  const licensed = licenceState().known;
   const [costLo, costHi] = COST_ESTIMATES.longlist;
 
   const filters = longlist
@@ -627,12 +674,16 @@ function drawStep2(body) {
         <h2>API-Schlüssel</h2>
         ${keyBlockHtml()}
       </div>
+      <div class="card">
+        <h2>Lizenz</h2>
+        ${licenceBlockHtml()}
+      </div>
       <div class="notice notice-warn">Der Lauf nutzt Ihren eigenen API-Schlüssel; Kosten grob
       ${fmtAmount(costLo)}–${fmtAmount(costHi)}&nbsp;$.</div>
       ${costSummaryHtml()}
       <div class="row-actions">
         <button class="btn" data-action="back-1" ${running ? 'disabled' : ''}>Zurück zu Schritt 1</button>
-        <button class="btn btn-primary" data-action="start" ${(!apiKey || longlist.length === 0 || running) ? 'disabled' : ''}>
+        <button class="btn btn-primary" data-action="start" ${(!apiKey || !licensed || longlist.length === 0 || running) ? 'disabled' : ''}>
           Longlist-Suche starten
         </button>
         <span id="wf-status" class="muted"></span>
@@ -670,6 +721,30 @@ async function handleStep2Action(action, body) {
     }
     return;
   }
+  if (action === 'activate-licence') {
+    const input = body.querySelector('#licence-key-input');
+    const key = input?.value.trim();
+    if (!key) { toast('Bitte den Lizenzschlüssel eingeben.'); return; }
+    const button = body.querySelector('[data-action="activate-licence"]');
+    if (button) { button.disabled = true; button.textContent = 'Prüfe …'; }
+    const result = await activate(key);
+    if (!result.ok) {
+      if (button) { button.disabled = false; button.textContent = 'Aktivieren'; }
+      toast(result.message);
+      return;
+    }
+    toast(`Lizenz aktiviert — Gerät ${result.deviceCount} von ${result.maxDevices}.`);
+    draw();
+    return;
+  }
+  if (action === 'clear-licence') {
+    if (await confirmDialog('Die Lizenz von diesem Gerät lösen? Der Geräteplatz bleibt belegt, bis er zurückgesetzt wird.', 'Lösen')) {
+      clearLicence();
+      toast('Lizenz von diesem Gerät gelöst.');
+      draw();
+    }
+    return;
+  }
   if (action === 'start') startLonglist(body);
 }
 
@@ -686,14 +761,11 @@ function preselect(candidates, offset = 0) {
 // append: Nachsuche mit Ausschluss der bereits gefundenen Namen (FR-409). Übergeben
 // werden ausschließlich Kandidaten dieses Laufs — nie gespeicherte Leads.
 async function startLonglist(body, { append = false } = {}) {
-  const previous = append && result ? result.candidates : [];
-  let request;
-  try {
-    request = buildLonglistRequest(profile, { ...params, today, exclude: previous.map((c) => c.name) });
-  } catch (e) {
-    toast(e.message);
-    return;
-  }
+  // Die Sperre muss SYNCHRON vor dem ersten await stehen. Die Lizenzprüfung
+  // unten wartet bis zu 3 Sekunden — ohne diese Zeile öffnete das ein Fenster,
+  // in dem ein zweiter Klick einen zweiten Lauf startet.
+  if (running) return;
+  running = true;
 
   const lockButtons = (locked) => {
     const start = body.querySelector('[data-action="start"]');
@@ -701,13 +773,34 @@ async function startLonglist(body, { append = false } = {}) {
     const back = body.querySelector('[data-action="back-1"]');
     if (back) back.disabled = locked;
   };
+  lockButtons(true);
+  const abort = () => { running = false; lockButtons(false); setStatus(''); };
 
-  running = true;
+  const previous = append && result ? result.candidates : [];
+  let request;
+  try {
+    request = buildLonglistRequest(profile, { ...params, today, exclude: previous.map((c) => c.name) });
+  } catch (e) {
+    toast(e.message);
+    abort();
+    return;
+  }
+
+  // Der einzige Prüfpunkt für Schritt 2 — er deckt auch die Nachsuche ab
+  // ("Weitere Kandidaten suchen"), die den Knopf-Handler umgeht.
+  setStatus('Lizenz wird geprüft …');
+  const licence = await ensureLicence();
+  if (!licence.ok) {
+    abort();
+    toast(licence.message);
+    draw();
+    return;
+  }
+
   if (!append) {
     result = null;
     body.querySelector('#wf-results').innerHTML = '';
   }
-  lockButtons(true);
 
   let error = null;
   let message = '';
@@ -911,6 +1004,7 @@ function drawStep3(body) {
       ${pre.length} Pre-Screening-Kriterien — mit Quelle, Konfidenz (belegt/abgeleitet)
       und Belegdatum je Wert. Werte ohne Quelle werden verworfen.</p>
       ${apiKey ? '' : `<div class="card"><h2>API-Schlüssel</h2>${keyBlockHtml()}</div>`}
+      ${licenceState().known ? '' : `<div class="card"><h2>Lizenz</h2>${licenceBlockHtml()}</div>`}
       <div class="inline-fields">
         <div class="field grow">
           <label for="deep-name">Eigenes Unternehmen prüfen — Name</label>
@@ -945,7 +1039,9 @@ function drawStep3(body) {
     renderDeepControls(body);
     renderDeepEntries(body);
   });
-  body.querySelectorAll('[data-action="save-key"], [data-action="clear-key"]').forEach((el) => {
+  // Schritt 3 bindet nicht wie Schritt 2 jedes [data-action] automatisch — die
+  // Lizenz-Aktionen müssen hier ausdrücklich mit aufgezählt werden.
+  body.querySelectorAll('[data-action="save-key"], [data-action="clear-key"], [data-action="activate-licence"], [data-action="clear-licence"]').forEach((el) => {
     el.addEventListener('click', () => handleStep2Action(el.dataset.action, body));
   });
 
@@ -961,6 +1057,7 @@ function renderDeepControls(body) {
   const total = deepRun.entries.length;
   const cost = estimateDeepCost(pending);
   const apiKey = store.getApiKey();
+  const licensed = licenceState().known;
   const batches = Math.ceil(pending / DEEP_CONCURRENCY);
 
   target.innerHTML = `
@@ -973,7 +1070,7 @@ function renderDeepControls(body) {
       <button class="btn" data-deep="back" ${deepRun.running ? 'disabled' : ''}>Zurück zu Schritt 2</button>
       ${deepRun.running
         ? '<button class="btn" data-deep="abort">Abbrechen</button>'
-        : `<button class="btn btn-primary" data-deep="start" ${(!apiKey || pending === 0) ? 'disabled' : ''}>
+        : `<button class="btn btn-primary" data-deep="start" ${(!apiKey || !licensed || pending === 0) ? 'disabled' : ''}>
              ${deepRun.entries.some((e) => e.status === 'done' || e.status === 'error') ? 'Fortsetzen' : 'Tiefen-Screening starten'}
            </button>`}
       <span id="deep-status" class="muted"></span>
@@ -1036,9 +1133,10 @@ function renderDeepEntries(body) {
   });
 }
 
-function updateDeepStatus(body) {
+function updateDeepStatus(body, override = null) {
   const statusEl = body.querySelector('#deep-status');
   if (!statusEl) return;
+  if (override !== null) { statusEl.textContent = override; return; }
   if (!deepRun.running) { statusEl.textContent = ''; return; }
   const active = deepRun.entries.filter((e) => e.status === 'running').map((e) => e.name);
   const done = deepRun.entries.filter((e) => e.status === 'done' || e.status === 'error').length;
@@ -1104,10 +1202,23 @@ async function deepWorker(body) {
 }
 
 async function runDeepLoop(body) {
+  // Die vorhandene synchrone Sperre bleibt und deckt zugleich die Wartezeit der
+  // Lizenzprüfung ab — sie steht vor dem ersten await.
   if (deepRun.running) return;
   deepRun.running = true;
   deepRun.controllers = new Set();
   renderDeepControls(body);
+
+  // Der einzige Prüfpunkt für Schritt 3 — er deckt auch "Fortsetzen" ab,
+  // das denselben Knopf und denselben Weg nutzt.
+  updateDeepStatus(body, 'Lizenz wird geprüft …');
+  const licence = await ensureLicence();
+  if (!licence.ok) {
+    deepRun.running = false;
+    toast(licence.message);
+    drawStep3(body);
+    return;
+  }
 
   const workers = Array.from({ length: DEEP_CONCURRENCY }, () => deepWorker(body));
   await Promise.all(workers);

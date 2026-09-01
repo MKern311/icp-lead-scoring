@@ -30,7 +30,13 @@ Die Katalog-Vorschläge sind ein guter Startpunkt, aber selten wörtlich passend
 3. Der Code funktioniert ohne Server — auch auf GitHub Pages.
 4. Unbrauchbare Codes führen zu einer konkreten deutschen Meldung, nie zu einem Absturz.
 
-### US3 — Die öffentliche Seite ist nicht für jeden (P2)
+### US3 — Die öffentliche Seite ist nicht für jeden (P2) — **abgelöst durch Feature 012**
+
+> Mit Feature 012 (2026-08-31) entfällt das Zugangswort ersatzlos: `js/gate.js` ist
+> gelöscht, `index.html` lädt `js/app.js` direkt. An seine Stelle tritt die Lizenz — sie
+> sitzt aber **nur** vor der Online-Recherche, nicht vor der Anwendung. Das Werkzeug ist
+> damit bewusst öffentlich benutzbar: erst ausprobieren, dann kaufen. Das Folgende
+> beschreibt den historischen Stand.
 
 **Akzeptanz**
 1. Auf der öffentlich erreichbaren Seite erscheint vor der App eine Abfrage des
@@ -48,8 +54,8 @@ Die Katalog-Vorschläge sind ein guter Startpunkt, aber selten wörtlich passend
 - **FR-421** `core/profile-code.js` kodiert das Export-Objekt als
   `ICP1-<base64url(gzip(json))>` und dekodiert es zurück; `ICP0-` ist die
   unkomprimierte Rückfallebene.
-- **FR-422** `js/gate.js` lädt `app.js` erst nach erfolgreicher Wortprüfung
-  (SHA-256-Vergleich); auf localhost sofort.
+- **FR-422** ~~`js/gate.js` lädt `app.js` erst nach erfolgreicher Wortprüfung
+  (SHA-256-Vergleich); auf localhost sofort.~~ **Aufgehoben durch FR-1207** (Feature 012).
 
 ## Success Criteria
 

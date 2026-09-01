@@ -73,10 +73,13 @@ const server = createServer(async (req, res) => {
     // nach einem Neuladen der Seite, ohne Server-Neustart.
     const env = await readEnv();
     const apiKey = env.ANTHROPIC_API_KEY || '';
+    // LICENCE_API: nur fürs Entwickeln gegen einen lokal laufenden Lizenzdienst.
+    // Ohne Eintrag gilt die Konstante in js/licence.js.
+    const licenceApi = env.LICENCE_API || '';
     res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
-    }).end(JSON.stringify({ apiKey, source: apiKey ? '.env' : null }));
+    }).end(JSON.stringify({ apiKey, licenceApi, source: apiKey ? '.env' : null }));
     return;
   }
 

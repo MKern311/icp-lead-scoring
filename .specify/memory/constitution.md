@@ -1,13 +1,19 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 2.0.0 (MAJOR: Prinzip III umdefiniert — Offline-Pflicht gilt nur noch
-  für Kernfunktionen; optionale, nutzerinitiierte Online-Funktionen sind unter Auflagen zulässig)
+- Version change: 2.0.0 → 3.0.0 (MAJOR: aus Prinzip IV wird der Satz „Online-Funktionen nach
+  Prinzip III kommen ohne eigenes Backend aus" gestrichen; Prinzip III erhält eine zweite,
+  eng begrenzte Online-Ausnahme für die Lizenzprüfung)
 - Modified principles:
-  - II. Nachvollziehbare Scores → ergänzt: KI-Recherche darf nur Rohwerte mit Quellen liefern,
-    niemals Punkte oder Scores
-  - III. Lokale Datenhoheit → Lokale Datenhoheit & Offline-Kern (Online-Ausnahme geregelt)
+  - III. Lokale Datenhoheit & Offline-Kern → zweite Ausnahme: Lizenzprüfung, mit abschließender
+    Aufzählung der übertragbaren Felder und Fail-open-Pflicht
+  - IV. Einfachheit & Ein-Personen-Betrieb → Backend-Verbot durch eine benannte Ausnahme ersetzt;
+    Lizenzschlüssel ausdrücklich als kein Benutzerkonto festgehalten
 - Added sections: none
 - Removed sections: none
+- Warum MAJOR und nicht MINOR: Die Governance-Regel stuft „Prinzip entfernt/umgedeutet" als MAJOR
+  ein. Prinzip IV verliert einen Satz, der bisher jedes eigene Backend ausschloss — dieselbe Art
+  Einschränkung, die schon den Sprung 1.0.0 → 2.0.0 begründete. Als Erweiterung wäre das
+  schöngeredet.
 - Templates requiring updates:
   - ✅ .specify/templates/plan-template.md (generischer Constitution-Check, keine Änderung nötig)
   - ✅ .specify/templates/spec-template.md (keine Änderung nötig)
@@ -56,19 +62,39 @@ niemals in Repo, Export oder Vorlagen gelangt, (c) ausschließlich Profil-Defini
 Bewertungen — und (d) bei fehlender Verbindung oder fehlendem Schlüssel die Kernfunktionen
 unberührt lassen. Es werden keine Telemetrie- oder Analysedaten gesendet.
 
+Als **zweite und abschließende Ausnahme** ist eine Lizenzprüfung zulässig, wenn sie kumulativ:
+(a) ausschließlich vor dem Start einer Online-Recherche greift — nie vor Kernfunktionen,
+(b) ausschließlich Lizenzschlüssel, Gerätekennung, Gerätebezeichnung und das daraus erzeugte
+Freigabe-Merkmal überträgt (abschließende Aufzählung — niemals Profile, Kriterien, Leads,
+Bewertungen oder den API-Schlüssel des Nutzers), (c) **fail-open** arbeitet: nur eine eindeutige
+Absage des Lizenzdienstes hält eine Recherche an; Netzfehler, Zeitüberschreitung und
+Serverfehler tun es nie, und (d) Export, Sicherung und jede andere Kernfunktion auch bei
+abgelaufener oder gesperrter Lizenz unangetastet lässt. Daten werden nie als Geisel genommen.
+
 **Rationale**: Lead-Daten sind vertrauliche Geschäftsdaten (u. a. Beratungsmandate). Der
 Offline-Kern eliminiert Vertraulichkeits- und DSGVO-Risiken; die eng begrenzte Online-Ausnahme
-ermöglicht Recherche-Nutzen, ohne die Datenhoheit über Bestandsdaten aufzugeben.
+ermöglicht Recherche-Nutzen, ohne die Datenhoheit über Bestandsdaten aufzugeben. Die
+Lizenzprüfung sitzt bewusst genau dort, wo das Werkzeug ohnehin online ist — sie verschiebt die
+Offline-Grenze nicht, sondern legt sich auf sie.
 
 ### IV. Einfachheit & Ein-Personen-Betrieb
 
 v1 ist ein Einzelnutzer-Werkzeug: keine Benutzerkonten, Rollen, Rechte oder Synchronisation.
 Neue Abhängigkeiten, Build-Schritte und Infrastruktur MÜSSEN sich durch konkreten Nutzerwert
 rechtfertigen (YAGNI). Installation und Start MÜSSEN ohne technisches Spezialwissen möglich
-sein. Online-Funktionen nach Prinzip III kommen ohne eigenes Backend aus.
+sein. Recherche-Funktionen nach Prinzip III kommen ohne eigenes Backend aus; das **einzige**
+zulässige eigene Backend ist der Lizenzdienst nach Prinzip III, und auch er MUSS abschaltbar
+bleiben, ohne dass eine Kernfunktion ausfällt.
+
+Ein Lizenzschlüssel ist **kein Benutzerkonto**: kein Login, kein Passwort, kein Profil auf einem
+Server, keine wiederkehrende Zahlung. Er ist eine Zahlungskonvention und ausdrücklich kein
+Kopierschutz — eine Prüfung, die im Browser läuft, ist umgehbar, und der Versuch, sie zu
+„härten", verletzt regelmäßig den Offline-Kern.
 
 **Rationale**: Zielgruppe sind Einzelpersonen (Berater, Selbstständige, Dozenten), nicht
-IT-Abteilungen. Jede Betriebskomplexität senkt die Nutzbarkeit für genau diese Gruppe.
+IT-Abteilungen. Jede Betriebskomplexität senkt die Nutzbarkeit für genau diese Gruppe. Der
+Lizenzdienst ist die einzige Ausnahme, weil das Werkzeug sonst nicht verkäuflich wäre — er
+trägt genau zwei Tabellen und lässt sich einzeln abschalten.
 
 ### V. Testbare Scoring-Logik
 
@@ -85,8 +111,9 @@ sie muss unabhängig von Darstellungs- und Übertragungsfragen beweisbar bleiben
 ## Zusätzliche Constraints
 
 - Profile MÜSSEN in einem offenen, menschenlesbaren Dateiformat exportiert werden, damit
-  Weitergabe und Versionierung ohne das Werkzeug selbst möglich sind. API-Schlüssel sind nie
-  Teil eines Exports.
+  Weitergabe und Versionierung ohne das Werkzeug selbst möglich sind. API-Schlüssel und
+  Lizenzdaten (Lizenzschlüssel, Freigabe-Merkmal, Gerätekennung) sind nie Teil eines Exports,
+  einer Sicherung oder eines Profil-Codes.
 - CSV-Import/-Export bleibt die Pflicht-Schnittstelle für Lead-Daten; das Recherche-Screening
   ist eine optionale Online-Funktion nach Prinzip III. CRM-Integrationen bleiben ausgeschlossen.
 - Recherche-Ergebnisse MÜSSEN vor Übernahme in den Lead-Bestand vom Nutzer geprüft und
@@ -114,4 +141,4 @@ und die abhängigen Templates (`plan`, `spec`, `tasks`) auf Konsistenz prüfen. 
 Implementierungsphasen MÜSSEN im „Constitution Check" gegen die Prinzipien I–V geprüft werden;
 Abweichungen sind nur mit dokumentierter Begründung im Complexity-Tracking zulässig.
 
-**Version**: 2.0.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-05
+**Version**: 3.0.0 | **Ratified**: 2026-08-04 | **Last Amended**: 2026-08-31
