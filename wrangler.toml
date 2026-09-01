@@ -1,0 +1,24 @@
+# Auslieferung des Werkzeugs als Cloudflare Worker mit statischen Assets.
+#
+# Es gibt keinen Build-Schritt: `docs/` ist die fertige Anwendung und wird
+# unverändert ausgeliefert. Der Ordner heißt aus historischen Gründen `docs` —
+# er war einmal die GitHub-Pages-Wurzel.
+#
+# Cloudflare führt Pages inzwischen in Workers über; die Git-Anbindung ruft
+# `npx wrangler deploy` auf und liest diese Datei.
+
+name = "icp-lead-scoring"
+compatibility_date = "2026-09-01"
+
+# Eigene Adresse. Das Werkzeug spricht mit dem Lizenzdienst unter
+# licence.manuelkern.com, und dessen ALLOWED_ORIGIN erlaubt ausschließlich diese
+# Adresse — von einer Vorschau-Adresse aus scheitert jede Aktivierung an CORS.
+routes = [
+  { pattern = "icp.manuelkern.com", custom_domain = true }
+]
+
+[assets]
+directory = "./docs"
+# Unbekannte Pfade bleiben 404. Die App routet über den Hash (#/leads, #/screening),
+# das erreicht den Server nie — eine SPA-Umleitung wäre hier nur eine Lüge.
+not_found_handling = "none"
