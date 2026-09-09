@@ -85,18 +85,22 @@
 - [ ] T1236b Stripe **Livemodus**: eigenes Produkt, eigener Payment Link, eigener
       Webhook-Endpunkt, neues `whsec_` per `wrangler secret put`. Testmodus-Werte
       gelten dort **nicht** — **Nutzer-Task**
-- [ ] T1237 Resend: Absender-Domain verifizieren, `npx wrangler secret put
-      RESEND_API_KEY`. **Bis dahin bekommt kein Käufer seinen Schlüssel** — die Mail
-      landet im Worker-Log statt im Postfach. Härtester offener Punkt vor dem
-      Livegang — **Nutzer-Task**
+- [X] T1237 Resend: `RESEND_API_KEY` gesetzt (erster Anlauf landete im Secret-**Namen**
+      statt im Wert — der Schlüssel war damit im Klartext sichtbar und wurde ersetzt).
+      Zweiter Testkauf hat die Lizenz erzeugt.
 - [X] T1238a Testkauf → Webhook → Lizenz `ICP-P7NE-0Z9H-VD7D` angelegt → im Browser
       aktiviert, Gerät 1 von 2 („Chrome auf macOS") serverseitig bestätigt.
-- [ ] T1238b Rest der Abnahme: Gerät 2 aktivieren → drittes Gerät ergibt `409` mit
-      **beiden** Gerätenamen → `./admin.sh reset` → Aktivierung gelingt wieder →
-      `./admin.sh revoke` → nächste Recherche stoppt, **Export und Sicherung laufen
-      weiter**
-- [ ] T1233 Grabstein **aufspielen**, bevor Pages abgeschaltet wird — sonst bedient der
-      alte Service Worker Altbesucher unbegrenzt mit der lizenzfreien Fassung
-      — **Nutzer-Task**
-- [ ] T1239 GitHub Pages abschalten (nach T1233), Repo auf privat; Test-Lizenzzeile
-      entfernen und die Testzahlung in Stripe aufräumen
+- [X] T1238b Abnahme der Geräteregel gegen den Live-Dienst, 20 Prüfungen ohne Fehler:
+      alle vier Zweige, dasselbe Gerät verbraucht keinen zweiten Platz, `409` nennt
+      beide Geräte samt Datum und die Kontaktadresse, **CORS steht auch auf der
+      409-Antwort** (Contract Regel 10), `verify` gibt einen frischen Token zurück,
+      unbekannter Schlüssel `404`, nach `reset-devices` gelingt die Aktivierung wieder,
+      nach `revoke` liefert `verify` `ok:false / revoked` und `activate` `403`.
+- [X] T1233 Grabstein aufgespielt: verwaister Zweig `gh-pages` mit `index.html` **und**
+      `sw.js`, Pages-Quelle auf `gh-pages / (root)` umgestellt. Das `sw.js` fehlte in der
+      Vorbereitung und ist der eigentliche Hebel — der alte Worker liefert cache-first
+      ohne Revalidierung aus und hat `index.html` im Vorrat, eine neue Seite allein
+      hätte ihn nie erreicht.
+- [ ] T1239 GitHub Pages abschalten (erst wenn der Grabstein lange genug stand — er
+      wirkt nur, solange die Adresse erreichbar ist), Repo auf privat, Test-Lizenzzeilen
+      entfernen, Testzahlungen in Stripe aufräumen — **Nutzer-Task**

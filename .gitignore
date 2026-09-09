@@ -10,3 +10,6 @@ Thumbs.db
 .vscode/
 .idea/
 backup/
+
+# Wrangler-Betriebsspuren (lokale Zustaende, Build-Cache)
+.wrangler/
