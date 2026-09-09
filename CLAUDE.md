@@ -3,7 +3,9 @@
 Generisches ICP-Definitions- und Lead-Scoring-Tool. Statische Web-App;
 optionales Online-Screening (Claude API + Websuche, eigener Nutzer-Schlüssel),
 lizenzpflichtig über den Dienst im Nachbarrepo `50_dev/icp-licence`.
-Ausgeliefert unter **icp.manuelkern.com** (Cloudflare Pages, Wurzel `docs/`).
+Ausgeliefert unter **icp.manuelkern.com** als Cloudflare Worker mit statischen Assets
+(`wrangler.toml`, `[assets] directory = "./docs"`, **kein** `main` — es gibt keinen
+Server-Code; `docs/` bleibt die Wurzel, `_headers` wird gelesen).
 
 ## Verbindliche Artefakte (Quelle der Wahrheit)
 
@@ -34,7 +36,7 @@ Ausgeliefert unter **icp.manuelkern.com** (Cloudflare Pages, Wurzel `docs/`).
 - Feature 011: `specs/011-schema-limits/` (FR-1001: Antwortschema fester Größe —
   `values` als Liste, keine Unions, keine optionalen Felder, keine enums)
 - Feature 012: `specs/012-licence/` (Lizenz vor der Online-Recherche, Umzug auf
-  icp.manuelkern.com via Cloudflare Pages, Zugangswort entfällt; Regeln fixiert in
+  icp.manuelkern.com als Worker mit statischen Assets, Zugangswort entfällt; Regeln in
   `contracts/licence.md`. Der Dienst dazu liegt in `50_dev/icp-licence` — Cloudflare
   Worker + D1, laufende Kosten 0 €, eigene `CLAUDE.md`)
 

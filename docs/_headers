@@ -1,4 +1,5 @@
-# Cloudflare Pages liest diese Datei aus dem Ausgabeverzeichnis.
+# Cloudflare liest diese Datei aus dem Asset-Verzeichnis (Worker mit statischen
+# Assets, ebenso Pages).
 #
 # Der Service Worker und die Einstiegsseite dürfen NIE aus dem Browser-Cache
 # kommen: sonst hängt ein Besucher hinter einer alten Fassung fest und bekommt

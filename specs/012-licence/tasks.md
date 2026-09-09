@@ -63,27 +63,40 @@
       alten Service Worker ab (`registration.unregister()`), löscht alle `icp-cache-*`
       und verweist auf die neue Adresse. Die README dort enthält den `gh-pages`-Weg,
       der `main` unangetastet lässt.
-- [ ] T1233 Grabstein **aufspielen**, bevor Pages abgeschaltet wird — sonst bedient der
-      alte Service Worker Altbesucher unbegrenzt mit der lizenzfreien Fassung
-      — **Nutzer-Task**
 
 ## Phase 8: Inbetriebnahme — **Nutzer-Tasks**
 
-- [ ] T1234 Cloudflare Worker: `wrangler d1 create icp-licence` → `database_id` in
-      `wrangler.toml`; `npm run db:init`; Geheimnisse per `wrangler secret put`
-      (`openssl rand -hex 32` für `TOKEN_SECRET` und `ADMIN_TOKEN`,
-      `STRIPE_WEBHOOK_SECRET` zunächst als Platzhalter); `npm run deploy`;
-      `/healthz` grün. Die Custom Domain `licence.manuelkern.com` legt Cloudflare
-      selbst an, weil die Zone dort liegt.
-- [ ] T1235 Cloudflare Pages: Projekt auf `icp-lead-scoring`, Framework-Preset
-      **None**, Build-Befehl leer, Ausgabeverzeichnis `docs`, Domain
-      `icp.manuelkern.com`
-- [ ] T1236 Stripe (Testmodus): Produkt 99 € einmalig, Payment Link, Webhook auf
+- [X] T1234 Cloudflare Worker `icp-licence` steht: D1 `icp-licence`
+      (`f00e20ad-7328-459c-a72e-b775fe4b3654`), Schema eingespielt, `TOKEN_SECRET`,
+      `ADMIN_TOKEN` und `STRIPE_WEBHOOK_SECRET` als Secrets, Custom Domain
+      `licence.manuelkern.com`, `/healthz` grün. **Konto `manuelkern311@gmail.com`** —
+      die Zone liegt dort, ein erster Anlauf unter `mankern@gmx.de` scheiterte an
+      „Could not find zone" und wurde zurückgebaut.
+- [X] T1235 Auslieferung des Werkzeugs unter `icp.manuelkern.com`. **Abweichung:**
+      nicht Cloudflare Pages, sondern ein **Worker mit statischen Assets**
+      (`wrangler.toml`, `[assets] directory = "./docs"`, kein `main`). Gleiches
+      Ergebnis, gleiche Kosten, aber ein Werkzeug statt zweier Produkte — und `docs/`
+      bleibt ohne Build-Schritt die Wurzel. `_headers` wird unterstützt.
+- [X] T1236 Stripe **Testmodus**: Produkt 99 € einmalig, Payment Link, Webhook auf
       `https://licence.manuelkern.com/v1/stripe/webhook` (nur
-      `checkout.session.completed`), echtes `STRIPE_WEBHOOK_SECRET` nachtragen
-- [ ] T1237 Resend: Absender-Domain verifizieren, `MAIL_FROM` und `SUPPORT_EMAIL`
-- [ ] T1238 Testkauf: Mail → Aktivierung Gerät 1 und 2 → drittes Gerät ergibt `409` mit
-      beiden Namen → `reset-devices` → Aktivierung gelingt → `revoke` → nächste Recherche
-      stoppt, **Export und Sicherung laufen weiter**
-- [ ] T1239 GitHub Pages abschalten (nach T1233), Repo auf privat; Testzeilen per SQL
-      entfernen
+      `checkout.session.completed`), echtes `STRIPE_WEBHOOK_SECRET` eingetragen und
+      durch einen Testkauf belegt. Nebenbefund: Payment Links füllen
+      `customer_details` — die Annahme aus dem Contract hält.
+- [ ] T1236b Stripe **Livemodus**: eigenes Produkt, eigener Payment Link, eigener
+      Webhook-Endpunkt, neues `whsec_` per `wrangler secret put`. Testmodus-Werte
+      gelten dort **nicht** — **Nutzer-Task**
+- [ ] T1237 Resend: Absender-Domain verifizieren, `npx wrangler secret put
+      RESEND_API_KEY`. **Bis dahin bekommt kein Käufer seinen Schlüssel** — die Mail
+      landet im Worker-Log statt im Postfach. Härtester offener Punkt vor dem
+      Livegang — **Nutzer-Task**
+- [X] T1238a Testkauf → Webhook → Lizenz `ICP-P7NE-0Z9H-VD7D` angelegt → im Browser
+      aktiviert, Gerät 1 von 2 („Chrome auf macOS") serverseitig bestätigt.
+- [ ] T1238b Rest der Abnahme: Gerät 2 aktivieren → drittes Gerät ergibt `409` mit
+      **beiden** Gerätenamen → `./admin.sh reset` → Aktivierung gelingt wieder →
+      `./admin.sh revoke` → nächste Recherche stoppt, **Export und Sicherung laufen
+      weiter**
+- [ ] T1233 Grabstein **aufspielen**, bevor Pages abgeschaltet wird — sonst bedient der
+      alte Service Worker Altbesucher unbegrenzt mit der lizenzfreien Fassung
+      — **Nutzer-Task**
+- [ ] T1239 GitHub Pages abschalten (nach T1233), Repo auf privat; Test-Lizenzzeile
+      entfernen und die Testzahlung in Stripe aufräumen

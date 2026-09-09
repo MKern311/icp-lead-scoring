@@ -80,7 +80,7 @@ zusätzlich `LICENCE_API=http://localhost:8787` ein.
 
 ## Aufbau
 
-- `docs/` — die App (zugleich GitHub-Pages-Root, deploybar wie sie ist)
+- `docs/` — die App, ohne Build-Schritt deploybar (Asset-Wurzel des Cloudflare Workers)
 - `docs/js/core/` — pure, DOM-freie Logik (Scoring, Screening, CSV, Import/Export)
 - `tests/` — Tests der Kernlogik (`node --test`)
 - `specs/` — Spezifikationen und verbindliche Verträge je Feature
