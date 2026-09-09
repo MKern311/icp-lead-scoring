@@ -5,6 +5,7 @@ import * as store from '../store.js';
 import { createProfile, createCriterion, createTier, validateProfile, weightSum, normalizeWeights, uuid, CRITERION_TYPES } from '../core/model.js';
 import { esc, toast, confirmDialog, navigate, refreshActiveProfileIndicator } from '../app.js';
 import { scoreRangeHtml, pointRangeText } from './criterion-editor.js';
+import { accessCardHtml, bindAccess } from './access-keys.js';
 
 const TYPE_LABELS = {
   select: 'Auswahlliste',
@@ -19,11 +20,17 @@ let isNew = false;
 let overviewOpen = true;      // Zustand der Kriterien-Übersicht, überlebt das Neuzeichnen
 let sortKey = null;           // null = Profilreihenfolge (die auch gespeichert wird)
 let sortDir = 1;              // 1 = aufsteigend, -1 = absteigend
+// Entwurf für das nächste Kriterium — überlebt das Neuzeichnen, damit ein halb
+// getippter Name nicht verschwindet, sobald anderswo etwas neu gezeichnet wird.
+let newCriterionName = '';
+let newCriterionType = 'select';
 
 export function render(section, params) {
   container = section;
   const id = params[0];
   isNew = id === 'new';
+  newCriterionName = '';
+  newCriterionType = 'select';
   if (isNew) {
     const stashed = sessionStorage.getItem('icp.newProfile');
     working = stashed ? JSON.parse(stashed) : createProfile('');
@@ -72,6 +79,8 @@ function draw(messages = null) {
       </div>
     </div>
 
+    ${accessCard()}
+
     ${overviewCard()}
 
     <div class="card">
@@ -84,15 +93,23 @@ function draw(messages = null) {
       ${sumOff ? '<div class="notice notice-warn">Die Gewichtssumme weicht von 100 % ab. Die Bewertung normiert die Gewichte automatisch — für klare Prozentwerte können Sie „Auf 100 normieren" nutzen.</div>' : ''}
       ${working.criteria.length === 0 ? '<div class="empty-state">Noch keine Kriterien — fügen Sie das erste hinzu.</div>' : ''}
       ${working.criteria.map((c, i) => criterionCard(c, i)).join('')}
+      <h3>Neues Kriterium</h3>
       <div class="inline-fields">
-        <div class="field">
-          <label for="new-criterion-type">Neues Kriterium</label>
+        <div class="field grow">
+          <label for="new-criterion-name">Name *</label>
+          <input type="text" id="new-criterion-name" maxlength="80" value="${esc(newCriterionName)}" placeholder="z. B. Branche">
+        </div>
+        <div class="field" style="max-width:14rem">
+          <label for="new-criterion-type">Art</label>
           <select id="new-criterion-type">
-            ${CRITERION_TYPES.map((t) => `<option value="${t}">${TYPE_LABELS[t]}</option>`).join('')}
+            ${CRITERION_TYPES.map((t) => `<option value="${t}" ${t === newCriterionType ? 'selected' : ''}>${TYPE_LABELS[t]}</option>`).join('')}
           </select>
         </div>
         <button class="btn" data-action="add-criterion">Kriterium hinzufügen</button>
       </div>
+      <div class="hint">Der Name steht später im Lead-Formular, in der Recherche und im CSV-Export —
+      die Art bestimmt, wie Punkte vergeben werden (Ausprägungen, Bereiche, Ja/Nein, Skala).
+      Beides bleibt danach änderbar.</div>
     </div>
 
     <div class="card">
@@ -113,6 +130,17 @@ function draw(messages = null) {
 
   container.querySelectorAll('[data-action]').forEach((el) => {
     el.addEventListener('click', () => handleAction(el.dataset));
+  });
+  bindAccess(container, () => draw());
+  const draftName = container.querySelector('#new-criterion-name');
+  draftName?.addEventListener('input', () => { newCriterionName = draftName.value; });
+  draftName?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    handleAction({ action: 'add-criterion' });
+  });
+  container.querySelector('#new-criterion-type')?.addEventListener('change', (e) => {
+    newCriterionType = e.target.value;
   });
   container.querySelectorAll('[data-bind]').forEach((el) => {
     el.addEventListener('change', () => handleBind(el));
@@ -142,6 +170,20 @@ function draw(messages = null) {
       else chosen.delete(oid);
       c.searchTargets = c.rules.options.map((o) => o.id).filter((id) => chosen.has(id));
     });
+  });
+}
+
+// Zugang für die Online-Recherche (API-Schlüssel + Lizenz) schon beim Anlegen:
+// Wer ein Profil baut, will damit anschließend recherchieren — beides hier zu
+// hinterlegen erspart den Abbruch mitten im Workflow. Die Karte klappt zu, sobald
+// beides vorliegt; Speicherort und Regeln liegen in `ui/access-keys.js`.
+function accessCard() {
+  return accessCardHtml({
+    collapseWhenReady: true,
+    intro: isNew
+      ? 'Optional, aber sinnvoll gleich hier: Beides wird erst für die Online-Recherche gebraucht — '
+        + 'das Profil selbst, Leads, Bewertung und Export laufen ohne. Hinterlegt ist es einmal für alle Profile.'
+      : 'Beides wird nur für die Online-Recherche gebraucht und gilt für alle Profile in diesem Browser.',
   });
 }
 
@@ -441,9 +483,24 @@ async function handleAction(dataset) {
       draw();
       return;
     case 'add-criterion': {
-      const type = container.querySelector('#new-criterion-type').value;
-      working.criteria.push(createCriterion(type));
+      const nameField = container.querySelector('#new-criterion-name');
+      const name = (nameField?.value ?? newCriterionName).trim();
+      if (!name) {
+        toast('Bitte einen Namen für das Kriterium eingeben.');
+        nameField?.focus();
+        return;
+      }
+      const type = container.querySelector('#new-criterion-type')?.value || newCriterionType;
+      const criterionToAdd = createCriterion(type);
+      criterionToAdd.name = name.slice(0, 80);
+      working.criteria.push(criterionToAdd);
+      newCriterionName = '';
+      newCriterionType = type;          // gleiche Art nacheinander mehrfach anlegen
       draw();
+      // Direkt zu den Punktregeln des neuen Kriteriums — dort geht es weiter.
+      const card = container.querySelector(`#crit-${criterionToAdd.id}`);
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      card?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
       return;
     }
     case 'clear-sort':

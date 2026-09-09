@@ -100,6 +100,14 @@ Server-Code; `docs/` bleibt die Wurzel, `_headers` wird gelesen).
   **Keine Sicherheitsgrenze** — alles unter `docs/` ist öffentlich abrufbar,
   die Prüfung ist umgehbar; Geheimnisse gehören dort niemals hin. Das Zugangswort
   aus Feature 007 (`js/gate.js`) ist mit Feature 012 entfallen
+- Zugang (API-Schlüssel + Lizenz) wird an **einer** Stelle eingesammelt:
+  `ui/access-keys.js` (`accessCardHtml`, `bindAccess`, `accessState`, Aktionen über
+  `data-access`). Die Karte steht im Profil-Editor (damit beides schon bei der Anlage
+  hinterlegt werden kann, eingeklappt sobald beides vorliegt) und in den Schritten 2/3
+  des Workflows. Das Modul sammelt nur ein — der Lizenz-Prüfpunkt bleibt in
+  `ui/workflow.js`. Der API-Schlüssel geht ausschließlich an api.anthropic.com;
+  ein OpenAI-Schlüssel funktioniert nicht (anthropic-eigener Header, Server-Tool
+  `web_search`, `pause_turn`-Fortsetzung, Preise in `PRICING`)
 - Erreichbare Punktzahl: `criterionPointRange`/`scoreRange`/`unreachableTiers` in
   `core/scoring.js` leiten die Spanne allein aus den Punktregeln ab (100 nur erreichbar,
   wenn jedes Kriterium eine 100-Punkte-Ausprägung hat). Zur Renderzeit berechnet, nie

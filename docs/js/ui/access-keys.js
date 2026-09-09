@@ -126,9 +126,9 @@ export function accessCardHtml({ collapseWhenReady = false, intro = '' } = {}) {
 
   if (ready && collapseWhenReady) {
     return `
-      <details class="card overview-card">
+      <details class="card fold-card">
         <summary>
-          <span class="overview-title">Zugang für die Online-Recherche</span>
+          <span class="fold-title">Zugang für die Online-Recherche</span>
           <span class="muted">API-Schlüssel und Lizenz hinterlegt — bereit</span>
         </summary>
         ${body}

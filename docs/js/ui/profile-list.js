@@ -54,7 +54,8 @@ function introBlock(hasProfiles) {
     <div class="intro-facts">
       <span><strong>Lokal:</strong> alle Daten bleiben in diesem Browser — kein Konto, kein Server.</span>
       <span><strong>Nachvollziehbar:</strong> Punkte entstehen aus Ihren Regeln, die Recherche liefert nur Rohwerte mit Quellen.</span>
-      <span><strong>Optional:</strong> die Online-Recherche braucht einen eigenen Anthropic-API-Schlüssel.</span>
+      <span><strong>Optional:</strong> die Online-Recherche braucht eine Lizenz und einen eigenen
+      Anthropic-API-Schlüssel — beides hinterlegen Sie direkt beim Anlegen des Profils.</span>
     </div>`;
 
   if (!hasProfiles) {

@@ -863,7 +863,6 @@ function isExistingLeadName(name) {
 
 function drawStep3(body) {
   if (!deepRun) deepRun = { entries: [], running: false, controllers: new Set() };
-  const apiKey = store.getApiKey();
   const pre = prescreeningCriteria(profile);
 
   body.innerHTML = `
