@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ICP-Agent ist umgezogen</title>
+<style>
+  :root { color-scheme: light; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 2rem;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #0f1140; background: #f8f8f8;
+  }
+  .box {
+    max-width: 30rem; background: #fff; border: 1px solid #e2e2e2;
+    border-radius: 12px; padding: 2rem;
+  }
+  h1 { font-size: 1.375rem; margin: 0 0 .75rem; }
+  p { margin: 0 0 1rem; }
+  a.btn {
+    display: inline-block; padding: .8rem 1.5rem; border-radius: 8px;
+    background: #292C87; color: #fff; text-decoration: none; font-weight: 600;
+  }
+  .muted { color: #6b6b6b; font-size: .875rem; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>Der ICP-Agent ist umgezogen</h1>
+    <p>Diese Adresse wird nicht mehr gepflegt. Das Werkzeug läuft jetzt unter:</p>
+    <p><a class="btn" href="https://icp.manuelkern.com/">icp.manuelkern.com</a></p>
+    <p class="muted">Ihre Profile und Leads lagen nur in diesem Browser und unter dieser
+    Adresse. Falls Sie hier noch Daten haben: <strong>zuerst</strong> zurück auf die alte
+    Seite, dort eine Sicherung herunterladen, dann unter der neuen Adresse einlesen.
+    Diese Seite hat den alten Zwischenspeicher bereits geleert — sie zeigt Ihre Daten
+    nicht mehr an, gelöscht sind die Daten selbst dadurch nicht.</p>
+  </div>
+  <script>
+    // Den alten Service Worker abmelden und seine Zwischenspeicher löschen.
+    // Ohne diesen Schritt liefert er Altbesuchern die frühere, lizenzfreie
+    // Fassung unbegrenzt weiter aus dem Cache — der Umzug bliebe für sie wirkungslos.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+        .catch(() => {});
+    }
+    if (window.caches) {
+      caches.keys()
+        .then((names) => Promise.all(names.filter((n) => n.startsWith('icp-cache-')).map((n) => caches.delete(n))))
+        .catch(() => {});
+    }
+  </script>
+</body>
+</html>
