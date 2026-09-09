@@ -82,9 +82,21 @@
       `checkout.session.completed`), echtes `STRIPE_WEBHOOK_SECRET` eingetragen und
       durch einen Testkauf belegt. Nebenbefund: Payment Links füllen
       `customer_details` — die Annahme aus dem Contract hält.
-- [ ] T1236b Stripe **Livemodus**: eigenes Produkt, eigener Payment Link, eigener
-      Webhook-Endpunkt, neues `whsec_` per `wrangler secret put`. Testmodus-Werte
-      gelten dort **nicht** — **Nutzer-Task**
+- [X] T1236b Stripe **Livemodus** — Grundgerüst: Produkt, Payment Link, Webhook-Endpunkt
+      und neues `whsec_` gesetzt. Belegt: eine mit dem **alten Testmodus-Geheimnis**
+      signierte Anfrage wird jetzt mit `400 invalid_signature` abgewiesen, das
+      Live-Geheimnis ist also wirksam. Ein Geheimnis heißt ein Modus — Testkäufe
+      scheitern ab jetzt planmäßig.
+- [ ] T1236c Stripe **Checkout einrichten** nach `icp-licence/VERKAUFSTEXTE.md` §2:
+      Preis auf **100,00 € tax-exclusive** ändern (angelegt wurde er mit 99 €; bei
+      „inklusive Steuern" blieben nur 84,03 € netto), Stripe Tax aktivieren,
+      USt-ID-Abfrage für Reverse-Charge, Rechnungsadresse als Pflichtfeld,
+      Widerrufs-Checkbox als Pflicht-Custom-Field, Belege per Mail einschalten,
+      Bestätigungsseite mit Spam-Hinweis — **Nutzer-Task**
+- [ ] T1236d **Echter Kauf im Livemodus** über 119 €, danach selbst erstatten. Die
+      einzige Prüfung, die zeigt, ob das eingetragene `whsec_` auch das richtige ist:
+      Mail kommt an, Lizenz steht in der Datenbank, Webhook meldet `200`
+      — **Nutzer-Task**
 - [X] T1237 Resend: `RESEND_API_KEY` gesetzt (erster Anlauf landete im Secret-**Namen**
       statt im Wert — der Schlüssel war damit im Klartext sichtbar und wurde ersetzt).
       Zweiter Testkauf hat die Lizenz erzeugt.
@@ -101,6 +113,16 @@
       Vorbereitung und ist der eigentliche Hebel — der alte Worker liefert cache-first
       ohne Revalidierung aus und hat `index.html` im Vorrat, eine neue Seite allein
       hätte ihn nie erreicht.
-- [ ] T1239 GitHub Pages abschalten (erst wenn der Grabstein lange genug stand — er
-      wirkt nur, solange die Adresse erreichbar ist), Repo auf privat, Test-Lizenzzeilen
-      entfernen, Testzahlungen in Stripe aufräumen — **Nutzer-Task**
+- [X] T1239 **entfällt bewusst.** Ursprünglich stand hier „Pages abschalten, Repo auf
+      privat". Beides wurde nach Prüfung verworfen: Der Grabstein wirkt nur, solange
+      die alte Adresse ihn ausliefert — abschalten stellt genau den Zustand her, gegen
+      den er gebaut wurde. Und ein privates Repo schützt nichts, weil `docs/` unter
+      icp.manuelkern.com ohnehin öffentlich abrufbar ist (der Schlüssel ist eine
+      Zahlungskonvention, kein Kopierschutz). Die Historie beider Repos wurde auf
+      Geheimnisse geprüft: keine. Die Test-Lizenzzeilen bleiben auf Wunsch stehen.
+- [ ] T1240 Verkaufsseite und Rechtstexte auf manuelkern.com — Widerrufsbelehrung, AGB,
+      Pflichtangaben und die zwei fehlenden Datenschutz-Abschnitte (Stripe,
+      Lizenzdienst/Resend) nach `icp-licence/VERKAUFSTEXTE.md`. Die bestehende
+      Datenschutzerklärung deckt nur die Website ab, nicht den Verkauf
+      — **Nutzer-Task, eigene Sitzung**
+- [ ] T1241 Anwaltliche Prüfung von Widerrufsbelehrung und AGB — **Nutzer-Task**
